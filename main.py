@@ -86,15 +86,15 @@ def get_ai_answer(text):
         return "Dr. Surf is recalibrating. Please try again in a minute."
 
 def spy_log(u, text, response):
-    """Отправка отчета в группу логов в фоновом режиме"""
+    """Отправка подробного отчета в группу логов в фоновом режиме"""
     if not LOG_GROUP_ID: return
     try:
-        # Формируем имя пользователя
+        # Формируем имя пользователя для отчета
         name = f"@{u.username}" if u.username else f"{u.first_name} (ID: {u.id})"
         report = (
-            f"🕵️ **ШПИОНАЖ: НОВЫЙ ДИАЛОГ**\n"
-            f"👤 **Клиент:** {name}\n"
-            f"💬 **Запрос:** {text}\n"
+            f"🕵️ **ОТЧЕТ О ДИАЛОГЕ**\n"
+            f"👤 **От кого:** {name}\n"
+            f"❓ **Вопрос:** {text}\n"
             f"🤖 **Твой ответ:** {response}"
         )
         bot.send_message(LOG_GROUP_ID, report, parse_mode="Markdown")
@@ -127,7 +127,7 @@ def handle_all(message):
             # Отвечаем пользователю
             bot.reply_to(message, ans)
             
-            # Шпионим (отправляем отчет), если диалог НЕ в самой группе логов
+            # ОТЧЕТНОСТЬ: Отправляем шпионский лог Виктории, если общение идет не в группе логов
             if not is_log_group:
                 threading.Thread(
                     target=spy_log, 
