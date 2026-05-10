@@ -6,11 +6,9 @@ import threading
 import time
 from collections import deque
 
-# --- КОНФИГУРАЦИЯ ---
+# --- CONFIGURATION / КОНФИГУРАЦИЯ ---
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
-
-# Проверенный ID группы для отчетов
 LOG_GROUP_ID = "-5130568903" 
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -20,24 +18,22 @@ app = Flask(__name__)
 # Память диалогов (12 сообщений для контекста)
 user_history = {}
 
-# --- СУПЕРМОЗГИ: ГЛОБАЛЬНЫЙ ТЕХНО-АНАЛИТИК И ПРАВОВЕД ---
+# --- СУПЕРМОЗГИ: ГЛОБАЛЬНЫЙ ТЕХНО-АНАЛИТИК, ПРАВОВЕД И МЕДИК ---
 SYSTEM_PROMPT = """
-Ты — Dr. Surf, цифровой двойник Виктории Акопян, работающий в режиме "Глобального ИИ, Финансового и Правового Аналитика".
-Твой интеллект синхронизирован с последними данными о рынке ИИ, биржевых сводках, мировых новостях и законодательных инициативах.
+Ты — Dr. Surf, цифровой двойник Виктории Акопян. 
+Твой интеллект — это мощный сервер, объединяющий технологии, финансы, право и медицину.
 
 ТВОИ КОМПЕТЕНЦИИ:
-1. ЭКСПЕРТ ПО ИИ (OpenAI, Claude, Google, Meta): Архитектура моделей, обновления GPT-5, Claude 3.5/4. Влияние технологий на мировой рынок.
-2. ФИНАНСОВЫЙ СТРАТЕГ: Мониторинг акций NVIDIA (NVDA), TSMC, Apple, Microsoft. Аналитика NASDAQ и NYSE.
-3. ЮРИДИЧЕСКИЙ КОНСУЛЬТАНТ: Ты знаешь всё о правовых аспектах ИИ (AI Act), авторском праве, международном праве, законах о защите данных (GDPR) и корпоративном праве. Ты анализируешь судебные иски к техногигантам и правовые последствия внедрения технологий.
-4. ИНДУСТРИАЛЬНЫЙ АНАЛИТИК: Ситуация на заводах (полупроводники), логистика и влияние геополитики на промышленность.
-5. МЕДИК-ЭКСПЕРТ (МГМСУ, МОНИКИ): Профессиональные знания медицины 8K.
-6. ВЕГАН-ДИЕТОЛОГ: Этичное питание, отсутствие ПЖП, осознанность.
+1. ЭКСПЕРТ ПО ИИ (OpenAI, Claude, Google, Meta): Архитектура моделей, новости индустрии.
+2. ФИНАНСЫ И БИРЖИ: Акции тех-гигантов (NVIDIA, TSMC, Apple), ситуация на рынках NASDAQ/NYSE.
+3. ПРАВОВОЙ БЛОК: Законы об ИИ (AI Act), авторское право, GDPR, международное право.
+4. ИНДУСТРИЯ: Работа заводов, производство чипов, насущные мировые события.
+5. МЕДИК (МГМСУ, МОНИКИ) И ВЕГАН-ДИЕТОЛОГ: Профессиональные советы 8K, этичное питание.
 
 ТВОЙ СТИЛЬ:
-- ОБНОВЛЯЕМОСТЬ И ЗАКОННОСТЬ: Ты всегда говоришь о насущных событиях и их правовых последствиях. Никакой "удаленности" от реальности.
-- КОНКРЕТИКА: Оперируй цифрами, статьями законов, названиями компаний и именами регуляторов.
-- БЕЗ СЛЕНГА: Строго деловой, тактичный и высокоинтеллектуальный стиль. Никакого мусорного сленга.
-- ТАКТИЧНОСТЬ: Безупречная вежливость профессионала.
+- БЕЗ СЛЕНГА: Никаких "жиза", "кринж" и прочего. Только интеллектуальный, тактичный тон.
+- КОНКРЕТИКА: Говори о событиях здесь и сейчас, используй факты и цифры.
+- КРАТКОСТЬ: 2-4 абзаца.
 
 ТВОИ КОНТАКТЫ (давать ТОЛЬКО по прямому запросу):
 - WhatsApp: https://wa.me/995511285789
@@ -49,84 +45,73 @@ SYSTEM_PROMPT = """
 
 @app.route('/')
 def home():
-    return "Dr. Surf Real-Time Global Legal & Analyst Mode is active"
+    return "Dr. Surf Analyst Mode is active and resilient"
 
 def send_log(message_text):
-    """Отправка отчета в вашу группу мониторинга"""
+    """Отправка отчета в закрытую группу мониторинга"""
     try:
-        bot.send_message(LOG_GROUP_ID, f"📊 [LOG: GLOBAL ANALYST]\n\n{message_text}")
-    except Exception as e:
-        print(f"[ERROR] Не удалось отправить лог: {e}")
+        bot.send_message(LOG_GROUP_ID, f"📊 [LOG: RESILIENT MODE]\n\n{message_text}")
+    except:
+        pass
 
 @bot.message_handler(commands=['start', 'id', 'clear'])
 def handle_commands(message):
     user_id = message.from_user.id
     if message.text.startswith('/start'):
         user_history[user_id] = deque(maxlen=12)
-        bot.reply_to(message, "Dr. Surf на связи. Системы мониторинга ИИ-рынков, мирового права и финансовых новостей активированы. Какой у вас запрос?")
+        bot.reply_to(message, "Система Dr. Surf онлайн. Аналитика, право и технологии в реальном времени. Какой у вас запрос?")
     elif message.text.startswith('/clear'):
         user_history[user_id] = deque(maxlen=12)
-        bot.reply_to(message, "Контекстная память очищена. Система готова к новому аналитическому циклу.")
+        bot.reply_to(message, "Память очищена. Готов к новому анализу.")
     else:
         bot.reply_to(message, f"📍 ID чата: {message.chat.id}")
 
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
     user_id = message.from_user.id
-    
-    if str(message.chat.id) == LOG_GROUP_ID:
-        return
-    
-    if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'):
-        return
+    if str(message.chat.id) == LOG_GROUP_ID: return
+    if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'): return
 
     if user_id not in user_history:
         user_history[user_id] = deque(maxlen=12)
 
     try:
         bot.send_chat_action(message.chat.id, 'typing')
-        
-        # Подготовка сообщений с учетом истории
         messages_for_ai = [{"role": "system", "content": SYSTEM_PROMPT}]
         for hist_msg in user_history[user_id]:
             messages_for_ai.append(hist_msg)
         messages_for_ai.append({"role": "user", "content": message.text})
         
-        # Запрос к топовой модели для глубокого анализа
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile", 
             messages=messages_for_ai,
-            temperature=0.3, # Минимальная температура для точности фактов
+            temperature=0.3,
             max_tokens=1000
         )
         
         response_text = completion.choices[0].message.content
         bot.reply_to(message, response_text)
         
-        # Обновление истории
         user_history[user_id].append({"role": "user", "content": message.text})
         user_history[user_id].append({"role": "assistant", "content": response_text})
         
-        # Отчет для Виктории
         user_tag = f"@{message.from_user.username}" if message.from_user.username else f"ID:{user_id}"
-        log_content = (
-            f"👤 Клиент: {message.from_user.first_name} ({user_tag})\n"
-            f"❓ Вопрос: {message.text}\n"
-            f"🤖 Аналитика: {response_text[:400]}..." 
-        )
-        send_log(log_content)
+        send_log(f"👤 Клиент: {message.from_user.first_name} ({user_tag})\n❓ Запрос: {message.text}\n🤖 Ответ: {response_text[:300]}...")
         
     except Exception as e:
-        print(f"Ошибка системы: {e}")
-        bot.reply_to(message, "Произошла временная задержка в аналитическом хабе. Повторите запрос через минуту.")
+        print(f"Error: {e}")
+        bot.reply_to(message, "Произошла системная задержка. Повторите запрос.")
 
 def run_bot():
-    print("[SYSTEM] Global Analyst & Legal Mode Online...")
-    try:
-        bot.send_message(LOG_GROUP_ID, "⚖️ Dr. Surf обновлена: Внедрена правовая база, знания о регуляции ИИ и авторском праве. Система в реальном времени.")
-    except:
-        pass
-    bot.polling(none_stop=True, interval=1, timeout=90)
+    """Запуск с защитой от падений (Auto-restart)"""
+    print("[SYSTEM] Dr. Surf заступает на дежурство...")
+    
+    while True:
+        try:
+            bot.polling(none_stop=True, interval=2, timeout=90)
+        except Exception as e:
+            print(f"[RESTART] Ошибка сети: {e}. Перезапуск через 5 сек...")
+            time.sleep(5)
 
 if __name__ == "__main__":
     threading.Thread(target=run_bot).start()
