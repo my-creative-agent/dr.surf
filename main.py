@@ -24,11 +24,14 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    """Эта страница нужна, чтобы сервер видел активность и не усыплял бота"""
+    """Страница-маяк для системы мониторинга, чтобы бот не засыпал"""
     return "Dr. Surf Status: Active & Monitoring. Uptime System Engaged."
 
-# Память диалогов
+# Память диалогов (сохраняем контекст последних 10 сообщений)
 user_history = {}
+
+# Флаг для предотвращения спама при перезагрузках
+first_run = True
 
 # --- СУПЕРМОЗГИ: ПИРОГИ (КОМПЕТЕНЦИИ) И ХАРАКТЕР ---
 SYSTEM_PROMPT = """
@@ -47,7 +50,7 @@ SYSTEM_PROMPT = """
 """
 
 def send_full_log_report(user, query, response):
-    """Полный отчет в группу: кто, что спросил и что именно ответил бот"""
+    """Отправка полного отчета в группу: кто, что спросил и что ответил бот"""
     try:
         user_tag = f"@{user.username}" if user.username else f"ID:{user.id}"
         
@@ -58,7 +61,6 @@ def send_full_log_report(user, query, response):
             f"🤖 **ОТВЕТ (ПИРОГИ):**\n{response}"
         )
         
-        # Разбивка длинных отчетов для Telegram
         if len(report) > 4000:
             for x in range(0, len(report), 4000):
                 bot.send_message(LOG_GROUP_ID, report[x:x+4000])
@@ -72,13 +74,14 @@ def send_full_log_report(user, query, response):
 def handle_commands(message):
     user_id = message.from_user.id
     user_history[user_id] = deque(maxlen=10)
-    bot.reply_to(message, "Система Dr. Surf в сети. Аналитика и медицина активны.")
+    bot.reply_to(message, "Система Dr. Surf активирована. Аналитика, медицина и право в вашем распоряжении.")
 
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
     user_id = message.from_user.id
     
     if str(message.chat.id) == LOG_GROUP_ID: return
+    
     if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'): 
         return
 
@@ -105,25 +108,31 @@ def handle_messages(message):
         user_history[user_id].append({"role": "user", "content": message.text})
         user_history[user_id].append({"role": "assistant", "content": response_text})
         
-        # Отправляем полный лог (вопрос + ответ)
         send_full_log_report(message.from_user, message.text, response_text)
         
     except Exception as e:
-        print(f"[ERROR] {e}")
+        print(f"[AI ERROR] {e}")
 
 def run_bot():
-    """Цикл работы бота с защитой от вылетов"""
+    """Вечный цикл работы без лишнего спама"""
+    global first_run
+    print("--- СИСТЕМА DR. SURF ЗАПУЩЕНА ---")
+    
     while True:
         try:
             bot.remove_webhook()
-            time.sleep(5)
+            time.sleep(2)
             
-            # Уведомление в группу о старте
-            try:
-                bot.send_message(LOG_GROUP_ID, "🛡️ **DR. SURF ONLINE:** Мониторинг ответов и система анти-сна запущены.")
-            except: pass
+            # Пишем в группу только при САМОМ первом включении
+            if first_run:
+                try:
+                    bot.send_message(LOG_GROUP_ID, "🛡️ **DR. SURF ONLINE:** Система мониторинга запущена. Отчеты будут приходить только по факту запросов.")
+                    first_run = False
+                except: pass
             
-            bot.polling(none_stop=True, interval=3, timeout=120, drop_pending_updates=True)
+            # Убрали drop_pending_updates, чтобы не было ошибок на старых версиях
+            bot.polling(none_stop=True, interval=2, timeout=90)
+            
         except Exception as e:
             err = str(e)
             if "Conflict" in err:
@@ -131,12 +140,10 @@ def run_bot():
                 time.sleep(60) 
             else:
                 print(f"Ошибка: {err}")
-                time.sleep(20)
+                time.sleep(30) # Увеличили паузу при ошибке, чтобы не спамить
 
 if __name__ == "__main__":
-    # Запуск бота в отдельном потоке
     threading.Thread(target=run_bot, daemon=True).start()
     
-    # Запуск Flask сервера (порт 10000 для Render или 7860 для Hugging Face)
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
