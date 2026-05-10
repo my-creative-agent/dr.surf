@@ -53,18 +53,22 @@ def send_log(message_text):
 
 @bot.message_handler(commands=['start', 'id', 'check'])
 def handle_commands(message):
-    if message.text == '/start':
+    current_id = str(message.chat.id)
+    if message.text.startswith('/start'):
         bot.reply_to(message, "Dr. Surf на связи. Кратко и экспертно: какой у вас вопрос?")
     else:
-        # ЭТА КОМАНДА ПОКАЖЕТ НАСТОЯЩИЙ ID
-        current_id = str(message.chat.id)
-        bot.reply_to(message, f"📍 ID этого чата: {current_id}\n\nЕсли отчеты не приходят в группу, вставьте этот номер в LOG_GROUP_ID на GitHub.")
-        print(f"[DEBUG] Команда ID вызвана в чате: {current_id}")
+        # Улучшенная команда ID: она сработает и в личке, и в группе
+        bot.reply_to(message, f"📍 ID этого чата: {current_id}\n\nЕсли это группа, скопируйте этот номер в LOG_GROUP_ID!")
+        print(f"[DEBUG] Команда ID вызвана! Чат: {current_id}, Тип: {message.chat.type}")
 
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
     # ЗАЩИТА: Не отвечаем на логи внутри группы
     if str(message.chat.id) == LOG_GROUP_ID:
+        return
+
+    # Если боту пишут в группе без команды (простой текст), мы его игнорируем, если он не к нему
+    if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'):
         return
 
     try:
@@ -104,6 +108,7 @@ def handle_messages(message):
             bot.reply_to(message, "Ошибка связи. Повторите запрос.")
 
 def run_bot():
+    print("[SYSTEM] Запуск polling...")
     bot.polling(none_stop=True)
 
 if __name__ == "__main__":
