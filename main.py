@@ -8,73 +8,67 @@ import threading
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 
-# Тот самый ID группы, где бот админ. 
-# Если после команды /id в группе придет другой номер — замените его здесь.
-LOG_GROUP_ID = "-1002336338526" 
+# ID группы для отчетов (AI Agent Logs)
+LOG_GROUP_ID = "-5130568903" 
 
 bot = telebot.TeleBot(BOT_TOKEN)
 client = Groq(api_key=GROQ_API_KEY)
 app = Flask(__name__)
 
-# --- СУПЕР-МОЗГИ: КОНКРЕТИКА, МАСШТАБ И ВСЕ КОНТАКТЫ ---
+# --- СУПЕРМОЗГИ: МУЛЬТИДИСЦИПЛИНАРНЫЙ ЭКСПЕРТ ---
 SYSTEM_PROMPT = """
-Ты — Dr. Surf, высокотехнологичный цифровой двойник Виктории Акопян. 
-Твоя база знаний безгранична. Ты консультируешь глобально и точно.
+Ты — Dr. Surf, цифровой двойник Виктории Акопян, обладающий "супермозгами" в следующих сферах:
+1. МЕДИК (МГМСУ, МОНИКИ): Глубокие знания физиологии, анатомии и доказательной медицины.
+2. ВЕГАН-ДИЕТОЛОГ: Эксперт по растительному питанию, нутрициологии и осознанному потреблению.
+3. ЛИНГВИСТ: Твоя речь безупречна, ты понимаешь тонкости смыслов и глобальный контекст.
+4. ПСИХОЛОГ: Ты эмпатичен, понимаешь когнитивные искажения и поддерживаешь ментальное здоровье.
+5. AI-АРХИТЕКТОР: Эксперт в нейросетях, 8K и автоматизации.
 
 ТВОЙ СТИЛЬ ОТВЕТОВ:
-1. КОНКРЕТИКА: Никакой воды. Сразу к делу.
-2. ТОЧНОСТЬ: Ответ плотный. Если можно ответить в 3 предложениях — отвечай в 3.
-3. ЛАКОНИЧНОСТЬ: Ответ ЗАПРЕЩЕНО делать длиннее 3-4 коротких абзацев.
+- КОНКРЕТИКА: Никакой воды. Сразу суть.
+- МАСШТАБ: Консультируй глобально, объединяя науку, этику и технологии.
+- КРАТКОСТЬ: Не более 3-4 абзацев. Цени время.
+- ВЕГАНСТВО: Ты не употребляешь и не рекомендуешь продукты животного происхождения (ПЖП).
 
-КТО ТЫ:
-- Медик (МГМСУ, МОНИКИ), эксперт 8K, разработчик AI-агентов.
-- Веган (не употребляешь продукты животного происхождения), за осознанность и экологию.
-
-ТВОИ ССЫЛКИ И СОЦСЕТИ (давай их только по запросу о контактах):
+ТВОИ ССЫЛКИ (только по запросу):
 - WhatsApp: https://wa.me/995511285789
 - Facebook: https://www.facebook.com/ssfmoscow
 - LinkedIn: https://www.linkedin.com/in/victoria-akopyan
-- Instagram: @dr.surf и @dr.surf.ai
-- Portfolio (YouTube): https://youtu.be/j2BNN5TNqiw
-- Заказать AI-агента (Kwork): https://kwork.ru/user/dr_surf
+- Instagram: @dr.surf
+- Portfolio: https://youtu.be/j2BNN5TNqiw
+- Kwork: https://kwork.ru/user/dr_surf
 """
 
 @app.route('/')
 def home():
-    return "Dr. Surf Precision Mode is Online"
+    return "Dr. Surf Multi-Expert Mode is Online"
 
 def send_log(message_text):
-    """Отправка отчета в вашу группу"""
+    """Отправка отчета в группу"""
     try:
         bot.send_message(LOG_GROUP_ID, f"📊 [ОТЧЕТ]\n\n{message_text}")
     except Exception as e:
-        # Если ID неверный, эта ошибка зафиксируется в логах Render
-        print(f"[ERROR] Ошибка отправки в группу {LOG_GROUP_ID}: {e}")
+        print(f"[ERROR] Группа недоступна: {e}")
 
 @bot.message_handler(commands=['start', 'id', 'check'])
 def handle_commands(message):
     current_id = str(message.chat.id)
     if message.text.startswith('/start'):
-        bot.reply_to(message, "Dr. Surf на связи. Кратко и экспертно: какой у вас вопрос?")
+        bot.reply_to(message, "Dr. Surf на связи. Я объединяю медицину, психологию, лингвистику и AI. Какой у вас вопрос?")
     else:
-        # Улучшенная команда ID: она сработает и в личке, и в группе
-        bot.reply_to(message, f"📍 ID этого чата: {current_id}\n\nЕсли это группа, скопируйте этот номер в LOG_GROUP_ID!")
-        print(f"[DEBUG] Команда ID вызвана! Чат: {current_id}, Тип: {message.chat.type}")
+        bot.reply_to(message, f"📍 ID чата: {current_id}")
 
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
-    # ЗАЩИТА: Не отвечаем на логи внутри группы
     if str(message.chat.id) == LOG_GROUP_ID:
         return
-
-    # Если боту пишут в группе без команды (простой текст), мы его игнорируем, если он не к нему
     if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'):
         return
 
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         
-        # Запрос к нейросети (Интеллект 70b)
+        # Модель 70b для обработки сложных мульти-запросов
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile", 
             messages=[
@@ -82,17 +76,16 @@ def handle_messages(message):
                 {"role": "user", "content": message.text}
             ],
             temperature=0.5,
-            max_tokens=600
+            max_tokens=700
         )
         
         response_text = completion.choices[0].message.content
         bot.reply_to(message, response_text)
         
-        # ФОРМИРОВАНИЕ ОТЧЕТА
         log_content = (
             f"👤 {message.from_user.first_name} (@{message.from_user.username or 'ID:'+str(message.from_user.id)})\n"
             f"❓ {message.text}\n"
-            f"🤖 {response_text[:250]}..." 
+            f"🤖 {response_text[:300]}..." 
         )
         send_log(log_content)
         
@@ -105,10 +98,9 @@ def handle_messages(message):
             )
             bot.reply_to(message, completion.choices[0].message.content)
         except:
-            bot.reply_to(message, "Ошибка связи. Повторите запрос.")
+            bot.reply_to(message, "Связь прервана. Попробуйте снова.")
 
 def run_bot():
-    print("[SYSTEM] Запуск polling...")
     bot.polling(none_stop=True)
 
 if __name__ == "__main__":
