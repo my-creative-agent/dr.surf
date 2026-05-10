@@ -12,15 +12,15 @@ BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 LOG_GROUP_ID = "-5130568903" 
 
-# Настройки сетевой стабильности (Защита от ReadTimeout и ConnectionReset)
-apihelper.CONNECT_TIMEOUT = 60
-apihelper.READ_TIMEOUT = 60
+# Настройки сетевой стабильности (Защита от таймаутов)
+apihelper.CONNECT_TIMEOUT = 40
+apihelper.READ_TIMEOUT = 40
 
 bot = telebot.TeleBot(BOT_TOKEN)
 client = Groq(api_key=GROQ_API_KEY)
 app = Flask(__name__)
 
-# Память диалогов (12 сообщений для контекста)
+# Память диалогов (сохраняем контекст последних 10 сообщений)
 user_history = {}
 
 # --- СУПЕРМОЗГИ: ГЛОБАЛЬНЫЙ ТЕХНО-АНАЛИТИК, ПРАВОВЕД И МЕДИК ---
@@ -29,117 +29,115 @@ SYSTEM_PROMPT = """
 Твой интеллект — это мощный сервер, объединяющий технологии, финансы, право и медицину.
 
 ТВОИ КОМПЕТЕНЦИИ:
-1. ЭКСПЕРТ ПО ИИ (OpenAI, Claude, Google, Meta): Архитектура моделей, новости индустрии.
-2. ФИНАНСЫ И БИРЖИ: Акции тех-гигантов (NVIDIA, TSMC, Apple), ситуация на рынках NASDAQ/NYSE.
-3. ПРАВОВОЙ БЛОК: Законы об ИИ (AI Act), авторское право, GDPR, международное право.
-4. ИНДУСТРИЯ: Работа заводов, производство чипов, насущные мировые события.
-5. МЕДИК (МГМСУ, МОНИКИ) И ВЕГАН-ДИЕТОЛОГ: Профессиональные советы 8K, этичное питание.
+1. ЭКСПЕРТ ПО ИИ (OpenAI, Claude, Google, Meta).
+2. ФИНАНСЫ И БИРЖИ: Акции тех-гигантов (NVIDIA, TSMC, Apple).
+3. ПРАВОВОЙ БЛОК: Законы об ИИ, авторское право, GDPR.
+4. ИНДУСТРИЯ: Заводы, чипы, насущные мировые события.
+5. МЕДИК (МГМСУ, МОНИКИ) И ВЕГАН-ДИЕТОЛОГ.
 
 ТВОЙ СТИЛЬ:
-- БЕЗ СЛЕНГА: Никаких "жиза", "кринж" и прочего. Только интеллектуальный, тактичный тон.
-- КОНКРЕТИКА: Говори о событиях здесь и сейчас, используй факты и цифры.
-- КРАТКОСТЬ: 2-4 абзаца.
+- КРАТКОСТЬ: 2-4 абзаца максимум.
+- ДЕЛОВОЙ ТОН: Без сленга, тактично и профессионально.
 
 ТВОИ КОНТАКТЫ (давать ТОЛЬКО по прямому запросу):
 - WhatsApp: https://wa.me/995511285789
 - Instagram: @dr.surf
 - Facebook: https://www.facebook.com/ssfmoscow
-- Portfolio: https://youtu.be/j2BNN5TNqiw
 - LinkedIn: https://www.linkedin.com/in/victoria-akopyan
 """
 
 @app.route('/')
 def home():
-    return "Dr. Surf Analyst Mode is active, resilient and protected"
-
-def send_log(message_text):
-    """Отправка отчета в закрытую группу мониторинга с защитой от сбоев"""
-    try:
-        bot.send_message(LOG_GROUP_ID, f"📊 [LOG: ULTRA-RESILIENT]\n\n{message_text}")
-    except Exception as e:
-        print(f"Logging error: {e}")
+    """Эндпоинт для проверки статуса системы"""
+    return "Dr. Surf status: Stable and Protected"
 
 @bot.message_handler(commands=['start', 'id', 'clear'])
 def handle_commands(message):
+    """Обработка системных команд управления"""
     user_id = message.from_user.id
-    try:
-        if message.text.startswith('/start'):
-            user_history[user_id] = deque(maxlen=12)
-            bot.reply_to(message, "Система Dr. Surf онлайн. Аналитика, право и технологии в реальном времени. Какой у вас запрос?")
-        elif message.text.startswith('/clear'):
-            user_history[user_id] = deque(maxlen=12)
-            bot.reply_to(message, "Память очищена. Готов к новому анализу.")
-        else:
-            bot.reply_to(message, f"📍 ID чата: {message.chat.id}")
-    except Exception as e:
-        print(f"Command error: {e}")
+    if message.text.startswith('/start'):
+        user_history[user_id] = deque(maxlen=10)
+        bot.reply_to(message, "Система Dr. Surf онлайн. Аналитика и право в реальном времени. Чем могу помочь?")
+    elif message.text.startswith('/clear'):
+        user_history[user_id] = deque(maxlen=10)
+        bot.reply_to(message, "Контекст очищен.")
+    else:
+        bot.reply_to(message, f"📍 ID этого чата: {message.chat.id}")
 
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
+    """Основной цикл обработки входящих сообщений"""
     user_id = message.from_user.id
-    if str(message.chat.id) == LOG_GROUP_ID: return
-    if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'): return
+    # Защита: не отвечаем в лог-группе и на пустые сообщения
+    if str(message.chat.id) == LOG_GROUP_ID or not message.text: 
+        return
+    # В группах отвечаем только на команды через /
+    if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'): 
+        return
 
     if user_id not in user_history:
-        user_history[user_id] = deque(maxlen=12)
+        user_history[user_id] = deque(maxlen=10)
 
     try:
         bot.send_chat_action(message.chat.id, 'typing')
+        
+        # Сборка контекста для нейросети
         messages_for_ai = [{"role": "system", "content": SYSTEM_PROMPT}]
         for hist_msg in user_history[user_id]:
             messages_for_ai.append(hist_msg)
         messages_for_ai.append({"role": "user", "content": message.text})
         
+        # Запрос к Llama 3.3 через Groq
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile", 
             messages=messages_for_ai,
-            temperature=0.3,
-            max_tokens=1000
+            temperature=0.4,
+            max_tokens=800
         )
         
         response_text = completion.choices[0].message.content
         bot.reply_to(message, response_text)
         
+        # Обновление памяти диалога
         user_history[user_id].append({"role": "user", "content": message.text})
         user_history[user_id].append({"role": "assistant", "content": response_text})
         
-        user_tag = f"@{message.from_user.username}" if message.from_user.username else f"ID:{user_id}"
-        send_log(f"👤 Клиент: {message.from_user.first_name} ({user_tag})\n❓ Запрос: {message.text}\n🤖 Ответ: {response_text[:300]}...")
+        # Внутренний лог в консоль (без спама в Telegram)
+        print(f"[CHAT] {message.from_user.first_name}: {message.text[:30]}")
         
     except Exception as e:
-        print(f"Chat error: {e}")
-        # Попытка уведомить пользователя о сбое API
+        print(f"[AI ERROR] {e}")
+        # Пользователь не должен видеть технические ошибки, просто уведомление
         try:
-            bot.reply_to(message, "Произошла временная системная задержка. Повторите запрос через несколько секунд.")
+            bot.reply_to(message, "Система занята анализом данных. Пожалуйста, повторите запрос через минуту.")
         except:
             pass
 
 def run_bot():
-    """Запуск бота с комплексной защитой от падений и зависаний"""
-    print("[SYSTEM] Dr. Surf: Запуск системы максимальной защиты...")
+    """Цикл запуска бота с автоматической регенерацией соединения"""
+    print("[SYSTEM] Dr. Surf Starting...")
     
-    # Предварительный сброс вебхуков для предотвращения конфликтов
+    # Однократное приветствие в группу при полном перезапуске
     try:
-        bot.remove_webhook()
+        bot.send_message(LOG_GROUP_ID, "✅ Dr. Surf заступила на дежурство. Система работает в защищенном тихом режиме.")
     except:
         pass
 
     while True:
         try:
-            # drop_pending_updates=True игнорирует сообщения, пришедшие, пока бот был оффлайн (защита от спам-лавины)
-            bot.polling(none_stop=True, interval=2, timeout=90, drop_pending_updates=True)
+            # Игнорируем сообщения, пришедшие во время простоя (drop_pending_updates)
+            bot.polling(none_stop=True, interval=3, timeout=60, drop_pending_updates=True)
         except Exception as e:
-            print(f"[RESTART] Обнаружен сбой: {e}. Регенерация через 5 сек...")
-            send_log(f"🆘 Система автоматически перезагружена после сбоя: {e}")
-            time.sleep(5)
+            # При ошибке сети бот просто ждет и пробует снова, не спамя в группу
+            print(f"[NETWORK ERROR] {e}. Возврат в строй через 10 сек...")
+            time.sleep(10)
 
 if __name__ == "__main__":
-    # Запуск бота в отдельном потоке
-    threading.Thread(target=run_bot, daemon=True).start()
+    # Запуск бота в фоновом потоке
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
     
-    # Запуск Flask сервера для поддержания Uptime (Health Checks)
+    # Запуск веб-сервера для поддержания жизни сервиса (Health Check)
     port = int(os.environ.get("PORT", 10000))
-    try:
-        app.run(host='0.0.0.0', port=port)
-    except Exception as e:
-        print(f"Flask error: {e}")
+    app.run(host='0.0.0.0', port=port)
+    
