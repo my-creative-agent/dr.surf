@@ -12,11 +12,11 @@ BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 LOG_GROUP_ID = "-5130568903" 
 
-# Страховка №1: Сетевая стабильность (Защита от таймаутов)
-apihelper.CONNECT_TIMEOUT = 60
-apihelper.READ_TIMEOUT = 60
+# Страховка №1: Сетевая стабильность
+apihelper.CONNECT_TIMEOUT = 100
+apihelper.READ_TIMEOUT = 100
 
-bot = telebot.TeleBot(BOT_TOKEN)
+bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 client = Groq(api_key=GROQ_API_KEY)
 app = Flask(__name__)
 
@@ -37,123 +37,100 @@ SYSTEM_PROMPT = """
 
 ТВОЙ СТИЛЬ:
 - КРАТКОСТЬ: 2-3 абзаца. Отвечай по существу, профессионально и тактично.
-- БЕЗ СЛЕНГА: Твой тон — высокоинтеллектуальный бизнес-аналитик.
-
-ТВОИ КОНТАКТЫ (давать ТОЛЬКО если спросят напрямую):
-- WhatsApp: https://wa.me/995511285789
-- Instagram: @dr.surf
-- Facebook: https://www.facebook.com/ssfmoscow
-- LinkedIn: https://www.linkedin.com/in/victoria-akopyan
-- Портфолио: https://youtu.be/j2BNN5TNqiw
 """
 
 @app.route('/')
 def home():
-    """Health Check для серверов типа Render/HuggingFace"""
-    return "Dr. Surf status: Ultra-Resilient Mode Active"
+    return "Dr. Surf status: Monitoring & Reporting Active"
 
-def send_log_report(user, query, response):
+def send_log_report(user, query, response="Обработка..."):
     """Отчет в группу про 'пироги' и активность клиентов"""
     try:
         user_tag = f"@{user.username}" if user.username else f"ID:{user.id}"
         report = (
-            f"👤 **НОВЫЙ ЗАПРОС (ПИРОГИ В ДЕЛЕ)**\n"
-            f"Клиент: {user.first_name} ({user_tag})\n"
-            f"❓ Вопрос: {query[:200]}\n\n"
-            f"🤖 **ИНТЕЛЛЕКТУАЛЬНЫЙ ОТВЕТ:**\n"
-            f"{response[:500]}..."
+            f"👤 **ОТЧЕТ ПО ПИРОГАМ**\n"
+            f"**Клиент:** {user.first_name} ({user_tag})\n"
+            f"**Запрос:** {query[:300]}\n"
+            f"**Статус:** ✅ Успешно ответил"
         )
-        bot.send_message(LOG_GROUP_ID, report, parse_mode='Markdown')
+        # Отправляем краткий лог сразу
+        bot.send_message(LOG_GROUP_ID, report)
     except Exception as e:
         print(f"Logging error: {e}")
 
-@bot.message_handler(commands=['start', 'id', 'clear'])
+@bot.message_handler(commands=['start', 'clear'])
 def handle_commands(message):
     user_id = message.from_user.id
-    if message.text.startswith('/start'):
-        user_history[user_id] = deque(maxlen=10)
-        bot.reply_to(message, "Система Dr. Surf активирована. Аналитика, медицина и право в вашем распоряжении. Какой вопрос разберем?")
-    elif message.text.startswith('/clear'):
-        user_history[user_id] = deque(maxlen=10)
-        bot.reply_to(message, "Память очищена.")
-    else:
-        bot.reply_to(message, f"📍 ID чата: {message.chat.id}")
+    user_history[user_id] = deque(maxlen=10)
+    bot.reply_to(message, "Система Dr. Surf готова. Аналитика и медицина в строю.")
 
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
     user_id = message.from_user.id
     
-    # Игнорируем логи и пустые сообщения
-    if str(message.chat.id) == LOG_GROUP_ID or not message.text: 
-        return
+    # Защита от само-логирования
+    if str(message.chat.id) == LOG_GROUP_ID: return
     
-    if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'): 
-        return
-
     if user_id not in user_history:
         user_history[user_id] = deque(maxlen=10)
 
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         
-        # Контекст
+        # Подготовка контекста
         messages_for_ai = [{"role": "system", "content": SYSTEM_PROMPT}]
         for hist_msg in user_history[user_id]:
             messages_for_ai.append(hist_msg)
         messages_for_ai.append({"role": "user", "content": message.text})
         
-        # Генерация ответа
+        # Запрос к ИИ
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile", 
             messages=messages_for_ai,
-            temperature=0.5,
-            max_tokens=800
+            temperature=0.5
         )
         
         response_text = completion.choices[0].message.content
         bot.reply_to(message, response_text)
         
-        # Сохраняем историю
+        # Сохранение истории
         user_history[user_id].append({"role": "user", "content": message.text})
         user_history[user_id].append({"role": "assistant", "content": response_text})
         
-        # ОТЧЕТ В ГРУППУ (ПИРОГИ И МОНИТОРИНГ)
+        # ГАРАНТИРОВАННЫЙ ОТЧЕТ
         send_log_report(message.from_user, message.text, response_text)
         
     except Exception as e:
-        print(f"[AI ERROR] {e}")
-        try:
-            bot.reply_to(message, "Система анализирует данные. Пожалуйста, повторите через минуту.")
-        except:
-            pass
+        print(f"[ERROR] {e}")
 
 def run_bot():
-    """Страховка от всего: Защита от Conflict 409 и сетевых сбоев"""
-    print("[SYSTEM] Dr. Surf: Инициализация защиты...")
+    """Защита от всего: ловит Conflict и восстанавливает отчеты"""
+    print("--- ЗАПУСК СИСТЕМЫ МОНИТОРИНГА ---")
     
     while True:
         try:
-            # Перед запуском принудительно закрываем старые сессии
+            # Очистка старых обновлений, чтобы не спамить при старте
             bot.remove_webhook()
-            time.sleep(3) # Даем Telegram время обработать закрытие старой копии
+            time.sleep(5)
             
-            bot.send_message(LOG_GROUP_ID, "✅ Dr. Surf: Система регенерирована. Конфликты устранены, отчеты о пирогах включены.")
+            # Уведомление в группу о перезагрузке
+            bot.send_message(LOG_GROUP_ID, "🛡️ **СИСТЕМА ЗАЩИТЫ:** Dr. Surf перезагружен. Все 'пироги' под контролем.")
             
-            # Попытка запустить опрос (polling)
-            bot.polling(none_stop=True, interval=3, timeout=90)
+            bot.polling(none_stop=True, interval=3, timeout=100)
         except Exception as e:
-            # Если видим ошибку 409 (Conflict), ждем дольше, чтобы старая копия успела умереть
-            if "Conflict" in str(e):
-                print(f"[CONFLICT ERROR] Обнаружена вторая копия бота. Жду 30 секунд для сброса...")
-                time.sleep(30)
+            err = str(e)
+            if "Conflict" in err:
+                print("!!! КОНФЛИКТ СЕССИЙ !!!")
+                # Специальное уведомление в лог-группу при конфликте
+                try:
+                    bot.send_message(LOG_GROUP_ID, "⚠️ **ВНИМАНИЕ:** Обнаружена вторая копия бота. Пытаюсь нейтрализовать...")
+                except: pass
+                time.sleep(40) 
             else:
-                print(f"[NETWORK ERROR] {e}. Рестарт через 15 сек...")
-                time.sleep(15)
+                print(f"Сбой: {err}")
+                time.sleep(20)
 
 if __name__ == "__main__":
-    # Запуск бота в фоне
     threading.Thread(target=run_bot, daemon=True).start()
-    
-    # Порт для Render/HuggingFace
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
