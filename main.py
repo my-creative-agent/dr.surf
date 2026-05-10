@@ -58,7 +58,7 @@ def handle_commands(message):
     else:
         # ЭТА КОМАНДА ПОКАЖЕТ НАСТОЯЩИЙ ID
         current_id = str(message.chat.id)
-        bot.reply_to(message, f"📍 ID этого чата: {current_id}\n\nЕсли отчеты не приходят, вставьте этот номер в LOG_GROUP_ID на GitHub.")
+        bot.reply_to(message, f"📍 ID этого чата: {current_id}\n\nЕсли отчеты не приходят в группу, вставьте этот номер в LOG_GROUP_ID на GitHub.")
         print(f"[DEBUG] Команда ID вызвана в чате: {current_id}")
 
 @bot.message_handler(func=lambda message: True)
