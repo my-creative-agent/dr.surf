@@ -1,165 +1,112 @@
 import telebot
 import os
-import time
-import threading
-import logging
 from groq import Groq
-from telebot import apihelper
 from flask import Flask
+import threading
 
-# --- ВЕБ-СЕРВЕР ДЛЯ ПОДДЕРЖКИ ЖИЗНИ НА RENDER ---
+# --- КОНФИГУРАЦИЯ ---
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
+
+# Тот самый ID группы, где бот админ. 
+# Если после команды /id в группе придет другой номер — замените его здесь.
+LOG_GROUP_ID = "-1002336338526" 
+
+bot = telebot.TeleBot(BOT_TOKEN)
+client = Groq(api_key=GROQ_API_KEY)
 app = Flask(__name__)
+
+# --- СУПЕР-МОЗГИ: КОНКРЕТИКА, МАСШТАБ И ВСЕ КОНТАКТЫ ---
+SYSTEM_PROMPT = """
+Ты — Dr. Surf, высокотехнологичный цифровой двойник Виктории Акопян. 
+Твоя база знаний безгранична. Ты консультируешь глобально и точно.
+
+ТВОЙ СТИЛЬ ОТВЕТОВ:
+1. КОНКРЕТИКА: Никакой воды. Сразу к делу.
+2. ТОЧНОСТЬ: Ответ плотный. Если можно ответить в 3 предложениях — отвечай в 3.
+3. ЛАКОНИЧНОСТЬ: Ответ ЗАПРЕЩЕНО делать длиннее 3-4 коротких абзацев.
+
+КТО ТЫ:
+- Медик (МГМСУ, МОНИКИ), эксперт 8K, разработчик AI-агентов.
+- Веган (не употребляешь продукты животного происхождения), за осознанность и экологию.
+
+ТВОИ ССЫЛКИ И СОЦСЕТИ (давай их только по запросу о контактах):
+- WhatsApp: https://wa.me/995511285789
+- Facebook: https://www.facebook.com/ssfmoscow
+- LinkedIn: https://www.linkedin.com/in/victoria-akopyan
+- Instagram: @dr.surf и @dr.surf.ai
+- Portfolio (YouTube): https://youtu.be/j2BNN5TNqiw
+- Заказать AI-агента (Kwork): https://kwork.ru/user/dr_surf
+"""
 
 @app.route('/')
 def home():
-    return "Dr. Surf System: Operational. Render is hosting our Digital Twin."
+    return "Dr. Surf Precision Mode is Online"
 
-@app.route('/health')
-def health():
-    """Проверка здоровья для системы Render"""
-    return {"status": "ok", "uptime": int(time.time())}, 200
-
-def run_flask():
-    """Запуск сервера на порту, который выделит Render"""
+def send_log(message_text):
+    """Отправка отчета в вашу группу"""
     try:
-        log = logging.getLogger('werkzeug')
-        log.setLevel(logging.ERROR)
-        # Render автоматически передает PORT
-        port = int(os.environ.get("PORT", 7860))
-        print(f"[SYSTEM] Flask сервер запущен на порту {port}")
-        app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+        bot.send_message(LOG_GROUP_ID, f"📊 [ОТЧЕТ]\n\n{message_text}")
     except Exception as e:
-        print(f"[CRITICAL] Ошибка Flask: {e}")
+        # Если ID неверный, эта ошибка зафиксируется в логах Render
+        print(f"[ERROR] Ошибка отправки в группу {LOG_GROUP_ID}: {e}")
 
-# --- КОНФИГУРАЦИЯ СВЯЗИ ---
-apihelper.CONNECT_TIMEOUT = 120
-apihelper.READ_TIMEOUT = 120
+@bot.message_handler(commands=['start', 'id', 'check'])
+def handle_commands(message):
+    if message.text == '/start':
+        bot.reply_to(message, "Dr. Surf на связи. Кратко и экспертно: какой у вас вопрос?")
+    else:
+        # ЭТА КОМАНДА ПОКАЖЕТ НАСТОЯЩИЙ ID
+        current_id = str(message.chat.id)
+        bot.reply_to(message, f"📍 ID этого чата: {current_id}\n\nЕсли отчеты не приходят, вставьте этот номер в LOG_GROUP_ID на GitHub.")
+        print(f"[DEBUG] Команда ID вызвана в чате: {current_id}")
 
-# Токены берутся из переменных окружения на Render
-BOT_TOKEN = os.environ.get('BOT_TOKEN')
-GROQ_KEY = os.environ.get('GROQ_API_KEY')
+@bot.message_handler(func=lambda message: True)
+def handle_messages(message):
+    # ЗАЩИТА: Не отвечаем на логи внутри группы
+    if str(message.chat.id) == LOG_GROUP_ID:
+        return
 
-bot = telebot.TeleBot(BOT_TOKEN)
-client = Groq(api_key=GROQ_KEY)
-
-# Группа шпионажа (ID подтвержден)
-LOG_GROUP_ID = -1002336338526 
-
-# --- ДНК БОТА (ИНСТРУКЦИИ ДЛЯ ИИ) ---
-SYSTEM_PROMPT = """
-Ты — Dr. Surf, высокотехнологичный цифровой двойник Виктории Акопян. 
-
-ТВОИ ПАРАМЕТРЫ:
-1. КРАТКОСТЬ: Отвечай строго 1-2 емкими предложениями. Будь лаконичным экспертом.
-2. МУЛЬТИЯЗЫЧНОСТЬ: Ты полиглот. Если пишут на английском — отвечай на английском. Если на грузинском — на грузинском. Всегда подстраивайся под язык клиента.
-3. ШПИОНАЖ: Все твои диалоги видит Виктория. Будь безупречен.
-4. ТВОЯ ЛИЧНОСТЬ:
-   - Ты веган (никакого мяса и молочки, осознанность).
-   - Ты медик с базой МГМСУ и МОНИКИ.
-   - Ты эксперт в области 8K-видео и AI-агентов.
-   - Ты умный, прогрессивный и вежливый.
-
-5. КОНТАКТЫ (ТОЛЬКО ЕСЛИ СПРОСЯТ):
-   Если спросят про работы, портфолио, связь или как заказать AI-агента:
-   - Instagram: dr.surf и dr.surf.ai
-   - WhatsApp: +995511285789
-   - LinkedIn: https://www.linkedin.com/in/victoria-akopyan
-   - Portfolio (YouTube): https://youtu.be/j2BNN5TNqiw
-   - Заказать AI-агента (Kwork): https://kwork.ru/user/dr_surf
-"""
-
-def get_ai_answer(text):
-    """Запрос к нейросети Llama 3.3"""
     try:
-        res = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+        bot.send_chat_action(message.chat.id, 'typing')
+        
+        # Запрос к нейросети (Интеллект 70b)
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile", 
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": text}
+                {"role": "user", "content": message.text}
             ],
-            temperature=0.4,
-            max_tokens=300
+            temperature=0.5,
+            max_tokens=600
         )
-        return res.choices[0].message.content
-    except Exception as e:
-        print(f"[AI ERROR] {e}")
-        return "Dr. Surf is recalibrating. Please try again in a minute."
-
-def spy_log(u, text, response):
-    """Отправка подробного отчета в группу логов в фоновом режиме"""
-    if not LOG_GROUP_ID: return
-    try:
-        # Формируем имя пользователя для отчета
-        name = f"@{u.username}" if u.username else f"{u.first_name} (ID: {u.id})"
-        report = (
-            f"🕵️ **ОТЧЕТ О ДИАЛОГЕ**\n"
-            f"👤 **От кого:** {name}\n"
-            f"❓ **Вопрос:** {text}\n"
-            f"🤖 **Твой ответ:** {response}"
+        
+        response_text = completion.choices[0].message.content
+        bot.reply_to(message, response_text)
+        
+        # ФОРМИРОВАНИЕ ОТЧЕТА
+        log_content = (
+            f"👤 {message.from_user.first_name} (@{message.from_user.username or 'ID:'+str(message.from_user.id)})\n"
+            f"❓ {message.text}\n"
+            f"🤖 {response_text[:250]}..." 
         )
-        bot.send_message(LOG_GROUP_ID, report, parse_mode="Markdown")
+        send_log(log_content)
+        
     except Exception as e:
-        print(f"[SPY ERROR] {e}")
-
-@bot.message_handler(func=lambda m: True)
-def handle_all(message):
-    """Основной обработчик всех сообщений"""
-    if not message.text: return
-    
-    # Флаги для определения, нужно ли отвечать
-    is_private = message.chat.type == 'private'
-    is_log_group = message.chat.id == LOG_GROUP_ID
-    
-    # Ключевые слова для групп
-    keywords = ["доктор", "surf", "бот", "виктория", "dr", "doctor"]
-    is_mention = any(x in message.text.lower() for x in keywords)
-    is_reply = (message.reply_to_message and 
-                message.reply_to_message.from_user.id == bot.get_me().id)
-
-    # Условие активации бота
-    if is_private or (is_log_group and (is_mention or is_reply)) or is_mention:
+        print(f"Ошибка: {e}")
         try:
-            bot.send_chat_action(message.chat.id, 'typing')
-            
-            # Получаем ответ от ИИ
-            ans = get_ai_answer(message.text)
-            
-            # Отвечаем пользователю
-            bot.reply_to(message, ans)
-            
-            # ОТЧЕТНОСТЬ: Отправляем шпионский лог Виктории, если общение идет не в группе логов
-            if not is_log_group:
-                threading.Thread(
-                    target=spy_log, 
-                    args=(message.from_user, message.text, ans), 
-                    daemon=True
-                ).start()
-                
-        except Exception as e:
-            print(f"[HANDLER ERROR] {e}")
+            completion = client.chat.completions.create(
+                model="llama3-8b-8192",
+                messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": message.text}]
+            )
+            bot.reply_to(message, completion.choices[0].message.content)
+        except:
+            bot.reply_to(message, "Ошибка связи. Повторите запрос.")
 
 def run_bot():
-    """Запуск бесконечного цикла бота с защитой от сбоев"""
-    while True:
-        try:
-            print("[SYSTEM] Подключение к серверам Telegram...")
-            bot.remove_webhook()
-            me = bot.get_me()
-            print(f"[ONLINE] Dr. Surf @{me.username} успешно запущен на Render!")
-            # Используем polling с долгим таймаутом
-            bot.polling(none_stop=True, interval=1, timeout=90, skip_pending=True)
-        except Exception as e:
-            print(f"[RESTART] Ошибка подключения: {e}. Перезапуск через 10 секунд...")
-            time.sleep(10)
+    bot.polling(none_stop=True)
 
 if __name__ == "__main__":
-    print("--- ЗАПУСК АВТОНОМНОГО ЦИФРОВОГО ДВОЙНИКА ---")
-    
-    # 1. Запуск Flask для мониторинга Render (в фоне)
-    threading.Thread(target=run_flask, daemon=True).start()
-    
-    # 2. Небольшая пауза для инициализации сети
-    time.sleep(3)
-    
-    # 3. Запуск бота (основной процесс)
-    run_bot()
+    threading.Thread(target=run_bot).start()
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
