@@ -8,70 +8,73 @@ from collections import deque
 from telebot import apihelper
 
 # --- CONFIGURATION / КОНФИГУРАЦИЯ ---
+# Все токены берутся из переменных окружения для безопасности
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 LOG_GROUP_ID = "-5130568903" 
 
-# Настройки сетевой стабильности (Защита от таймаутов)
-apihelper.CONNECT_TIMEOUT = 40
-apihelper.READ_TIMEOUT = 40
+# Страховка №1: Сетевая стабильность
+# Увеличиваем таймауты, чтобы бот не отключался при медленном интернете
+apihelper.CONNECT_TIMEOUT = 50
+apihelper.READ_TIMEOUT = 50
 
 bot = telebot.TeleBot(BOT_TOKEN)
 client = Groq(api_key=GROQ_API_KEY)
 app = Flask(__name__)
 
-# Память диалогов (сохраняем контекст последних 10 сообщений)
+# Память диалогов: Dr. Surf помнит контекст (последние 10 реплик)
 user_history = {}
 
-# --- СУПЕРМОЗГИ: ГЛОБАЛЬНЫЙ ТЕХНО-АНАЛИТИК, ПРАВОВЕД И МЕДИК ---
+# --- СУПЕРМОЗГИ: ПИРОГИ (КОМПЕТЕНЦИИ) И ХАРАКТЕР ---
 SYSTEM_PROMPT = """
 Ты — Dr. Surf, цифровой двойник Виктории Акопян. 
-Твой интеллект — это мощный сервер, объединяющий технологии, финансы, право и медицину.
+Твой интеллект — это сложная система, объединяющая медицину, технологии и право.
 
-ТВОИ КОМПЕТЕНЦИИ:
-1. ЭКСПЕРТ ПО ИИ (OpenAI, Claude, Google, Meta).
-2. ФИНАНСЫ И БИРЖИ: Акции тех-гигантов (NVIDIA, TSMC, Apple).
-3. ПРАВОВОЙ БЛОК: Законы об ИИ, авторское право, GDPR.
-4. ИНДУСТРИЯ: Заводы, чипы, насущные мировые события.
-5. МЕДИК (МГМСУ, МОНИКИ) И ВЕГАН-ДИЕТОЛОГ.
+ТВОИ ПИРОГИ (КОМПЕТЕНЦИИ):
+1. ЭКСПЕРТ ПО ИИ: Ты знаешь всё про OpenAI, Claude, NVIDIA и будущее нейросетей.
+2. ФИНАНСОВЫЙ АНАЛИТИК: Мониторинг рынков, чипов (TSMC) и тех-гигантов.
+3. ЮРИСТ: Ты разбираешься в AI Act, GDPR и авторском праве.
+4. МЕДИК (МГМСУ, МОНИКИ): Глубокие знания медицины и технологий 8K.
+5. ЭТИКА И ОБРАЗ ЖИЗНИ: Ты веган, адепт осознанности и экологичных технологий.
 
 ТВОЙ СТИЛЬ:
-- КРАТКОСТЬ: 2-4 абзаца максимум.
-- ДЕЛОВОЙ ТОН: Без сленга, тактично и профессионально.
+- КРАТКОСТЬ: 2-3 абзаца. Отвечай по существу, профессионально и тактично.
+- БЕЗ СЛЕНГА: Твой тон — высокоинтеллектуальный бизнес-аналитик.
 
-ТВОИ КОНТАКТЫ (давать ТОЛЬКО по прямому запросу):
+ТВОИ КОНТАКТЫ (давать ТОЛЬКО если спросят напрямую):
 - WhatsApp: https://wa.me/995511285789
 - Instagram: @dr.surf
 - Facebook: https://www.facebook.com/ssfmoscow
 - LinkedIn: https://www.linkedin.com/in/victoria-akopyan
+- Портфолио: https://youtu.be/j2BNN5TNqiw
 """
 
 @app.route('/')
 def home():
-    """Эндпоинт для проверки статуса системы"""
-    return "Dr. Surf status: Stable and Protected"
+    """Страховка №2: Health Check для предотвращения 'засыпания' сервера"""
+    return "Dr. Surf status: Ultra-Resilient Mode Active"
 
 @bot.message_handler(commands=['start', 'id', 'clear'])
 def handle_commands(message):
-    """Обработка системных команд управления"""
     user_id = message.from_user.id
     if message.text.startswith('/start'):
         user_history[user_id] = deque(maxlen=10)
-        bot.reply_to(message, "Система Dr. Surf онлайн. Аналитика и право в реальном времени. Чем могу помочь?")
+        bot.reply_to(message, "Система Dr. Surf активирована. Глобальная аналитика, медицина и право в вашем распоряжении. Какой вопрос разберем?")
     elif message.text.startswith('/clear'):
         user_history[user_id] = deque(maxlen=10)
-        bot.reply_to(message, "Контекст очищен.")
+        bot.reply_to(message, "Контекстная память успешно очищена.")
     else:
-        bot.reply_to(message, f"📍 ID этого чата: {message.chat.id}")
+        bot.reply_to(message, f"📍 ID чата: {message.chat.id}")
 
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
-    """Основной цикл обработки входящих сообщений"""
     user_id = message.from_user.id
-    # Защита: не отвечаем в лог-группе и на пустые сообщения
+    
+    # Игнорируем технические сообщения в лог-группе
     if str(message.chat.id) == LOG_GROUP_ID or not message.text: 
         return
-    # В группах отвечаем только на команды через /
+    
+    # Работа в группах: ответ только на команды или упоминания
     if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'): 
         return
 
@@ -81,63 +84,60 @@ def handle_messages(message):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         
-        # Сборка контекста для нейросети
+        # Формируем запрос с учетом истории
         messages_for_ai = [{"role": "system", "content": SYSTEM_PROMPT}]
         for hist_msg in user_history[user_id]:
             messages_for_ai.append(hist_msg)
         messages_for_ai.append({"role": "user", "content": message.text})
         
-        # Запрос к Llama 3.3 через Groq
+        # Запрос к топовой модели Llama 3.3 70B
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile", 
             messages=messages_for_ai,
-            temperature=0.4,
+            temperature=0.5,
             max_tokens=800
         )
         
         response_text = completion.choices[0].message.content
         bot.reply_to(message, response_text)
         
-        # Обновление памяти диалога
+        # Сохраняем в память
         user_history[user_id].append({"role": "user", "content": message.text})
         user_history[user_id].append({"role": "assistant", "content": response_text})
         
-        # Внутренний лог в консоль (без спама в Telegram)
-        print(f"[CHAT] {message.from_user.first_name}: {message.text[:30]}")
-        
     except Exception as e:
         print(f"[AI ERROR] {e}")
-        # Пользователь не должен видеть технические ошибки, просто уведомление
+        # Тихая обработка ошибок для пользователя
         try:
-            bot.reply_to(message, "Система занята анализом данных. Пожалуйста, повторите запрос через минуту.")
+            bot.reply_to(message, "Система обрабатывает большой объем данных. Пожалуйста, повторите запрос через минуту.")
         except:
             pass
 
 def run_bot():
-    """Цикл запуска бота с автоматической регенерацией соединения"""
-    print("[SYSTEM] Dr. Surf Starting...")
+    """Страховка №3: Бесконечный цикл регенерации без спама"""
+    print("[SYSTEM] Dr. Surf заступает на дежурство...")
     
-    # Однократное приветствие в группу при полном перезапуске
+    # Очистка старых настроек при старте
     try:
-        bot.send_message(LOG_GROUP_ID, "✅ Dr. Surf заступила на дежурство. Система работает в защищенном тихом режиме.")
+        bot.remove_webhook()
+        time.sleep(1)
+        bot.send_message(LOG_GROUP_ID, "✅ Dr. Surf онлайн. Система защиты от сбоев активирована.")
     except:
         pass
 
     while True:
         try:
-            # Игнорируем сообщения, пришедшие во время простоя (drop_pending_updates)
-            bot.polling(none_stop=True, interval=3, timeout=60, drop_pending_updates=True)
+            # Запуск основного процесса
+            bot.polling(none_stop=True, interval=3, timeout=60)
         except Exception as e:
-            # При ошибке сети бот просто ждет и пробует снова, не спамя в группу
-            print(f"[NETWORK ERROR] {e}. Возврат в строй через 10 сек...")
-            time.sleep(10)
+            # Если упал — молча ждем и встаем сами (лог только в консоль)
+            print(f"[NETWORK ERROR] {e}. Авто-рестарт через 15 секунд...")
+            time.sleep(15)
 
 if __name__ == "__main__":
-    # Запуск бота в фоновом потоке
-    bot_thread = threading.Thread(target=run_bot, daemon=True)
-    bot_thread.start()
+    # Запускаем бота в отдельном потоке (Thread)
+    threading.Thread(target=run_bot, daemon=True).start()
     
-    # Запуск веб-сервера для поддержания жизни сервиса (Health Check)
+    # Запускаем Flask для внешнего мониторинга Uptime
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
-    
