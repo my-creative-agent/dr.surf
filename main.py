@@ -8,21 +8,19 @@ from collections import deque
 from telebot import apihelper
 
 # --- CONFIGURATION / КОНФИГУРАЦИЯ ---
-# Все токены берутся из переменных окружения для безопасности
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 LOG_GROUP_ID = "-5130568903" 
 
-# Страховка №1: Сетевая стабильность
-# Увеличиваем таймауты, чтобы бот не отключался при медленном интернете
-apihelper.CONNECT_TIMEOUT = 50
-apihelper.READ_TIMEOUT = 50
+# Страховка №1: Сетевая стабильность (Защита от таймаутов)
+apihelper.CONNECT_TIMEOUT = 60
+apihelper.READ_TIMEOUT = 60
 
 bot = telebot.TeleBot(BOT_TOKEN)
 client = Groq(api_key=GROQ_API_KEY)
 app = Flask(__name__)
 
-# Память диалогов: Dr. Surf помнит контекст (последние 10 реплик)
+# Память диалогов (10 сообщений)
 user_history = {}
 
 # --- СУПЕРМОЗГИ: ПИРОГИ (КОМПЕТЕНЦИИ) И ХАРАКТЕР ---
@@ -51,18 +49,33 @@ SYSTEM_PROMPT = """
 
 @app.route('/')
 def home():
-    """Страховка №2: Health Check для предотвращения 'засыпания' сервера"""
+    """Health Check для серверов типа Render/HuggingFace"""
     return "Dr. Surf status: Ultra-Resilient Mode Active"
+
+def send_log_report(user, query, response):
+    """Отчет в группу про 'пироги' и активность клиентов"""
+    try:
+        user_tag = f"@{user.username}" if user.username else f"ID:{user.id}"
+        report = (
+            f"👤 **НОВЫЙ ЗАПРОС**\n"
+            f"Клиент: {user.first_name} ({user_tag})\n"
+            f"❓ Вопрос: {query[:200]}\n\n"
+            f"🤖 **ОТВЕТ DR. SURF:**\n"
+            f"{response[:500]}..."
+        )
+        bot.send_message(LOG_GROUP_ID, report, parse_mode='Markdown')
+    except Exception as e:
+        print(f"Logging error: {e}")
 
 @bot.message_handler(commands=['start', 'id', 'clear'])
 def handle_commands(message):
     user_id = message.from_user.id
     if message.text.startswith('/start'):
         user_history[user_id] = deque(maxlen=10)
-        bot.reply_to(message, "Система Dr. Surf активирована. Глобальная аналитика, медицина и право в вашем распоряжении. Какой вопрос разберем?")
+        bot.reply_to(message, "Система Dr. Surf активирована. Аналитика, медицина и право в вашем распоряжении. Какой вопрос разберем?")
     elif message.text.startswith('/clear'):
         user_history[user_id] = deque(maxlen=10)
-        bot.reply_to(message, "Контекстная память успешно очищена.")
+        bot.reply_to(message, "Память очищена.")
     else:
         bot.reply_to(message, f"📍 ID чата: {message.chat.id}")
 
@@ -70,11 +83,10 @@ def handle_commands(message):
 def handle_messages(message):
     user_id = message.from_user.id
     
-    # Игнорируем технические сообщения в лог-группе
+    # Игнорируем логи и пустые сообщения
     if str(message.chat.id) == LOG_GROUP_ID or not message.text: 
         return
     
-    # Работа в группах: ответ только на команды или упоминания
     if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'): 
         return
 
@@ -84,13 +96,13 @@ def handle_messages(message):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         
-        # Формируем запрос с учетом истории
+        # Контекст
         messages_for_ai = [{"role": "system", "content": SYSTEM_PROMPT}]
         for hist_msg in user_history[user_id]:
             messages_for_ai.append(hist_msg)
         messages_for_ai.append({"role": "user", "content": message.text})
         
-        # Запрос к топовой модели Llama 3.3 70B
+        # Генерация ответа
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile", 
             messages=messages_for_ai,
@@ -101,43 +113,40 @@ def handle_messages(message):
         response_text = completion.choices[0].message.content
         bot.reply_to(message, response_text)
         
-        # Сохраняем в память
+        # Сохраняем историю
         user_history[user_id].append({"role": "user", "content": message.text})
         user_history[user_id].append({"role": "assistant", "content": response_text})
         
+        # ОТЧЕТ В ГРУППУ (ПИРОГИ И МОНИТОРИНГ)
+        send_log_report(message.from_user, message.text, response_text)
+        
     except Exception as e:
         print(f"[AI ERROR] {e}")
-        # Тихая обработка ошибок для пользователя
         try:
-            bot.reply_to(message, "Система обрабатывает большой объем данных. Пожалуйста, повторите запрос через минуту.")
+            bot.reply_to(message, "Система анализирует данные. Пожалуйста, повторите через минуту.")
         except:
             pass
 
 def run_bot():
-    """Страховка №3: Бесконечный цикл регенерации без спама"""
+    """Страховка от всего: Цикл без ошибок и спама"""
     print("[SYSTEM] Dr. Surf заступает на дежурство...")
     
-    # Очистка старых настроек при старте
-    try:
-        bot.remove_webhook()
-        time.sleep(1)
-        bot.send_message(LOG_GROUP_ID, "✅ Dr. Surf онлайн. Система защиты от сбоев активирована.")
-    except:
-        pass
-
     while True:
         try:
-            # Запуск основного процесса
-            bot.polling(none_stop=True, interval=3, timeout=60)
+            # Сброс вебхука перед каждым запуском — лучшая страховка
+            bot.remove_webhook()
+            time.sleep(1)
+            bot.send_message(LOG_GROUP_ID, "✅ Dr. Surf: Система регенерирована. Мониторинг включен.")
+            
+            # polling без drop_pending_updates, чтобы избежать ошибок версии
+            bot.polling(none_stop=True, interval=2, timeout=60)
         except Exception as e:
-            # Если упал — молча ждем и встаем сами (лог только в консоль)
-            print(f"[NETWORK ERROR] {e}. Авто-рестарт через 15 секунд...")
+            # Тихий рестарт при сетевых сбоях
+            print(f"[NETWORK ERROR] {e}. Рестарт через 15 сек...")
             time.sleep(15)
 
 if __name__ == "__main__":
-    # Запускаем бота в отдельном потоке (Thread)
     threading.Thread(target=run_bot, daemon=True).start()
     
-    # Запускаем Flask для внешнего мониторинга Uptime
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
