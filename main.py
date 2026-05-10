@@ -57,10 +57,10 @@ def send_log_report(user, query, response):
     try:
         user_tag = f"@{user.username}" if user.username else f"ID:{user.id}"
         report = (
-            f"👤 **НОВЫЙ ЗАПРОС**\n"
+            f"👤 **НОВЫЙ ЗАПРОС (ПИРОГИ В ДЕЛЕ)**\n"
             f"Клиент: {user.first_name} ({user_tag})\n"
             f"❓ Вопрос: {query[:200]}\n\n"
-            f"🤖 **ОТВЕТ DR. SURF:**\n"
+            f"🤖 **ИНТЕЛЛЕКТУАЛЬНЫЙ ОТВЕТ:**\n"
             f"{response[:500]}..."
         )
         bot.send_message(LOG_GROUP_ID, report, parse_mode='Markdown')
@@ -128,25 +128,32 @@ def handle_messages(message):
             pass
 
 def run_bot():
-    """Страховка от всего: Цикл без ошибок и спама"""
-    print("[SYSTEM] Dr. Surf заступает на дежурство...")
+    """Страховка от всего: Защита от Conflict 409 и сетевых сбоев"""
+    print("[SYSTEM] Dr. Surf: Инициализация защиты...")
     
     while True:
         try:
-            # Сброс вебхука перед каждым запуском — лучшая страховка
+            # Перед запуском принудительно закрываем старые сессии
             bot.remove_webhook()
-            time.sleep(1)
-            bot.send_message(LOG_GROUP_ID, "✅ Dr. Surf: Система регенерирована. Мониторинг включен.")
+            time.sleep(3) # Даем Telegram время обработать закрытие старой копии
             
-            # polling без drop_pending_updates, чтобы избежать ошибок версии
-            bot.polling(none_stop=True, interval=2, timeout=60)
+            bot.send_message(LOG_GROUP_ID, "✅ Dr. Surf: Система регенерирована. Конфликты устранены, отчеты о пирогах включены.")
+            
+            # Попытка запустить опрос (polling)
+            bot.polling(none_stop=True, interval=3, timeout=90)
         except Exception as e:
-            # Тихий рестарт при сетевых сбоях
-            print(f"[NETWORK ERROR] {e}. Рестарт через 15 сек...")
-            time.sleep(15)
+            # Если видим ошибку 409 (Conflict), ждем дольше, чтобы старая копия успела умереть
+            if "Conflict" in str(e):
+                print(f"[CONFLICT ERROR] Обнаружена вторая копия бота. Жду 30 секунд для сброса...")
+                time.sleep(30)
+            else:
+                print(f"[NETWORK ERROR] {e}. Рестарт через 15 сек...")
+                time.sleep(15)
 
 if __name__ == "__main__":
+    # Запуск бота в фоне
     threading.Thread(target=run_bot, daemon=True).start()
     
+    # Порт для Render/HuggingFace
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
