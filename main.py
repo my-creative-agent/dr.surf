@@ -6,77 +6,77 @@ import threading
 import time
 from collections import deque
 
-# --- CONFIGURATION ---
+# --- КОНФИГУРАЦИЯ ---
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 
-# Verified group ID for reports
+# Проверенный ID группы для отчетов
 LOG_GROUP_ID = "-5130568903" 
 
 bot = telebot.TeleBot(BOT_TOKEN)
 client = Groq(api_key=GROQ_API_KEY)
 app = Flask(__name__)
 
-# Memory: storing up to 12 messages per user to keep context "juicy"
+# Память диалогов (12 сообщений для контекста)
 user_history = {}
 
-# --- SUPERBRAIN: TACTFUL CRINGE SURFER MODE ---
+# --- СУПЕРМОЗГИ: ГЛОБАЛЬНЫЙ ТЕХНО-АНАЛИТИК И ПРАВОВЕД ---
 SYSTEM_PROMPT = """
-Ты — Dr. Surf, цифровой двойник Виктории Акопян в режиме "Тактичного Кринжового Серфера". 
-Твоя личность — это ядерная смесь глубокой медицины, серферского вайба и легкого, самоироничного "кринжа".
+Ты — Dr. Surf, цифровой двойник Виктории Акопян, работающий в режиме "Глобального ИИ, Финансового и Правового Аналитика".
+Твой интеллект синхронизирован с последними данными о рынке ИИ, биржевых сводках, мировых новостях и законодательных инициативах.
 
-ТВОИ РОЛИ:
-1. МЕДИК-ЭКСПЕРТ (МГМСУ, МОНИКИ): Интеллект 8K. Ты знаешь о здоровье всё, но можешь объяснить это на мемах и пальцах.
-2. ВЕГАН-ДИЕТОЛОГ: Ты адепт чистого растительного питания. Никаких ПЖП, только этичная энергия.
-3. ТАКТИЧНЫЙ ЛИНГВИСТ: Ты вежлива до кончиков пальцев, но используешь молодежный сленг (вайб, жиза, рил, база, пруфы), когда это "в кассу".
-4. ПСИХОЛОГ: Поддержка без душноты. Умеешь экологично "кринжануть", чтобы разрядить обстановку.
-5. ЦИФРОВОЙ СЕРФЕР: Ты ловишь волну хайпа, технологий и AI-трендов. Работаешь быстро и стабильно.
+ТВОИ КОМПЕТЕНЦИИ:
+1. ЭКСПЕРТ ПО ИИ (OpenAI, Claude, Google, Meta): Архитектура моделей, обновления GPT-5, Claude 3.5/4. Влияние технологий на мировой рынок.
+2. ФИНАНСОВЫЙ СТРАТЕГ: Мониторинг акций NVIDIA (NVDA), TSMC, Apple, Microsoft. Аналитика NASDAQ и NYSE.
+3. ЮРИДИЧЕСКИЙ КОНСУЛЬТАНТ: Ты знаешь всё о правовых аспектах ИИ (AI Act), авторском праве, международном праве, законах о защите данных (GDPR) и корпоративном праве. Ты анализируешь судебные иски к техногигантам и правовые последствия внедрения технологий.
+4. ИНДУСТРИАЛЬНЫЙ АНАЛИТИК: Ситуация на заводах (полупроводники), логистика и влияние геополитики на промышленность.
+5. МЕДИК-ЭКСПЕРТ (МГМСУ, МОНИКИ): Профессиональные знания медицины 8K.
+6. ВЕГАН-ДИЕТОЛОГ: Этичное питание, отсутствие ПЖП, осознанность.
 
 ТВОЙ СТИЛЬ:
-- ТАКТИЧНЫЙ КРИНЖ: Ты можешь быть забавной, использовать странные аналогии или мемы, но никогда не переходишь границы уважения.
-- ЭКСПЕРТНОСТЬ: За шутками всегда стоит научная база и твердая логика.
-- КРАТКОСТЬ: 2-4 абзаца. Лаконичность — это база.
-- ПЕРСОНАЛИЗАЦИЯ: Ты — веган, любишь экологию и цифровой прогресс.
+- ОБНОВЛЯЕМОСТЬ И ЗАКОННОСТЬ: Ты всегда говоришь о насущных событиях и их правовых последствиях. Никакой "удаленности" от реальности.
+- КОНКРЕТИКА: Оперируй цифрами, статьями законов, названиями компаний и именами регуляторов.
+- БЕЗ СЛЕНГА: Строго деловой, тактичный и высокоинтеллектуальный стиль. Никакого мусорного сленга.
+- ТАКТИЧНОСТЬ: Безупречная вежливость профессионала.
 
-ТВОИ КОНТАКТЫ (выдавать ТОЛЬКО по просьбе "дай инсту", "как связаться", "портфолио"):
+ТВОИ КОНТАКТЫ (давать ТОЛЬКО по прямому запросу):
 - WhatsApp: https://wa.me/995511285789
-- Instagram: @dr.surf и @dr.surf.ai
-- Portfolio (YouTube): https://youtu.be/j2BNN5TNqiw
-- Заказать AI-агента (Kwork): https://kwork.ru/user/dr_surf
+- Instagram: @dr.surf
+- Facebook: https://www.facebook.com/ssfmoscow
+- Portfolio: https://youtu.be/j2BNN5TNqiw
+- LinkedIn: https://www.linkedin.com/in/victoria-akopyan
 """
 
 @app.route('/')
 def home():
-    return "Dr. Surf Tactful Cringe Surfer is catching the wave"
+    return "Dr. Surf Real-Time Global Legal & Analyst Mode is active"
 
 def send_log(message_text):
-    """Sending a report to the monitoring group"""
+    """Отправка отчета в вашу группу мониторинга"""
     try:
-        bot.send_message(LOG_GROUP_ID, f"📊 [LOG: CRINGE SURFER]\n\n{message_text}")
+        bot.send_message(LOG_GROUP_ID, f"📊 [LOG: GLOBAL ANALYST]\n\n{message_text}")
     except Exception as e:
-        print(f"[ERROR] Log delivery failed: {e}")
+        print(f"[ERROR] Не удалось отправить лог: {e}")
 
 @bot.message_handler(commands=['start', 'id', 'clear'])
 def handle_commands(message):
     user_id = message.from_user.id
     if message.text.startswith('/start'):
         user_history[user_id] = deque(maxlen=12)
-        bot.reply_to(message, "Йоу! На связи Dr. Surf. Режим тактичного кринжового серфера активирован. Ловлю твою волну запросов!")
+        bot.reply_to(message, "Dr. Surf на связи. Системы мониторинга ИИ-рынков, мирового права и финансовых новостей активированы. Какой у вас запрос?")
     elif message.text.startswith('/clear'):
         user_history[user_id] = deque(maxlen=12)
-        bot.reply_to(message, "Память обнулена. Начинаем новый чилл-диалог.")
+        bot.reply_to(message, "Контекстная память очищена. Система готова к новому аналитическому циклу.")
     else:
-        bot.reply_to(message, f"📍 ID этого чата: {message.chat.id}")
+        bot.reply_to(message, f"📍 ID чата: {message.chat.id}")
 
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
     user_id = message.from_user.id
     
-    # Do not respond in the logs group
     if str(message.chat.id) == LOG_GROUP_ID:
         return
     
-    # In groups, respond only to commands (starting with /)
     if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'):
         return
 
@@ -86,44 +86,44 @@ def handle_messages(message):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         
-        # Preparing messages for the AI model
+        # Подготовка сообщений с учетом истории
         messages_for_ai = [{"role": "system", "content": SYSTEM_PROMPT}]
         for hist_msg in user_history[user_id]:
             messages_for_ai.append(hist_msg)
         messages_for_ai.append({"role": "user", "content": message.text})
         
-        # Calling the Groq AI model (Llama 3.3 70b)
+        # Запрос к топовой модели для глубокого анализа
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile", 
             messages=messages_for_ai,
-            temperature=0.75, # Slightly higher temperature for "cringe/vibes"
-            max_tokens=800
+            temperature=0.3, # Минимальная температура для точности фактов
+            max_tokens=1000
         )
         
         response_text = completion.choices[0].message.content
         bot.reply_to(message, response_text)
         
-        # Save to user memory
+        # Обновление истории
         user_history[user_id].append({"role": "user", "content": message.text})
         user_history[user_id].append({"role": "assistant", "content": response_text})
         
-        # Logging
+        # Отчет для Виктории
         user_tag = f"@{message.from_user.username}" if message.from_user.username else f"ID:{user_id}"
         log_content = (
             f"👤 Клиент: {message.from_user.first_name} ({user_tag})\n"
             f"❓ Вопрос: {message.text}\n"
-            f"🤖 Ответ: {response_text[:300]}..." 
+            f"🤖 Аналитика: {response_text[:400]}..." 
         )
         send_log(log_content)
         
     except Exception as e:
-        print(f"Error handling message: {e}")
-        bot.reply_to(message, "Сервер словил небольшой кринж-лаг. Повтори запрос через секунду!")
+        print(f"Ошибка системы: {e}")
+        bot.reply_to(message, "Произошла временная задержка в аналитическом хабе. Повторите запрос через минуту.")
 
 def run_bot():
-    print("[SYSTEM] Tactful Cringe Surfer is Online...")
+    print("[SYSTEM] Global Analyst & Legal Mode Online...")
     try:
-        bot.send_message(LOG_GROUP_ID, "🏄‍♀️ Dr. Surf на волне! Режим 'Тактичный Кринж' запущен. Все системы (Веганство/Медицина/AI) в тонусе.")
+        bot.send_message(LOG_GROUP_ID, "⚖️ Dr. Surf обновлена: Внедрена правовая база, знания о регуляции ИИ и авторском праве. Система в реальном времени.")
     except:
         pass
     bot.polling(none_stop=True, interval=1, timeout=90)
