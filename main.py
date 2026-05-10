@@ -5,11 +5,16 @@ from flask import Flask
 import threading
 import time
 from collections import deque
+from telebot import apihelper
 
 # --- CONFIGURATION / КОНФИГУРАЦИЯ ---
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 LOG_GROUP_ID = "-5130568903" 
+
+# Настройки сетевой стабильности (Защита от ReadTimeout и ConnectionReset)
+apihelper.CONNECT_TIMEOUT = 60
+apihelper.READ_TIMEOUT = 60
 
 bot = telebot.TeleBot(BOT_TOKEN)
 client = Groq(api_key=GROQ_API_KEY)
@@ -45,26 +50,29 @@ SYSTEM_PROMPT = """
 
 @app.route('/')
 def home():
-    return "Dr. Surf Analyst Mode is active and resilient"
+    return "Dr. Surf Analyst Mode is active, resilient and protected"
 
 def send_log(message_text):
-    """Отправка отчета в закрытую группу мониторинга"""
+    """Отправка отчета в закрытую группу мониторинга с защитой от сбоев"""
     try:
-        bot.send_message(LOG_GROUP_ID, f"📊 [LOG: RESILIENT MODE]\n\n{message_text}")
-    except:
-        pass
+        bot.send_message(LOG_GROUP_ID, f"📊 [LOG: ULTRA-RESILIENT]\n\n{message_text}")
+    except Exception as e:
+        print(f"Logging error: {e}")
 
 @bot.message_handler(commands=['start', 'id', 'clear'])
 def handle_commands(message):
     user_id = message.from_user.id
-    if message.text.startswith('/start'):
-        user_history[user_id] = deque(maxlen=12)
-        bot.reply_to(message, "Система Dr. Surf онлайн. Аналитика, право и технологии в реальном времени. Какой у вас запрос?")
-    elif message.text.startswith('/clear'):
-        user_history[user_id] = deque(maxlen=12)
-        bot.reply_to(message, "Память очищена. Готов к новому анализу.")
-    else:
-        bot.reply_to(message, f"📍 ID чата: {message.chat.id}")
+    try:
+        if message.text.startswith('/start'):
+            user_history[user_id] = deque(maxlen=12)
+            bot.reply_to(message, "Система Dr. Surf онлайн. Аналитика, право и технологии в реальном времени. Какой у вас запрос?")
+        elif message.text.startswith('/clear'):
+            user_history[user_id] = deque(maxlen=12)
+            bot.reply_to(message, "Память очищена. Готов к новому анализу.")
+        else:
+            bot.reply_to(message, f"📍 ID чата: {message.chat.id}")
+    except Exception as e:
+        print(f"Command error: {e}")
 
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
@@ -99,21 +107,39 @@ def handle_messages(message):
         send_log(f"👤 Клиент: {message.from_user.first_name} ({user_tag})\n❓ Запрос: {message.text}\n🤖 Ответ: {response_text[:300]}...")
         
     except Exception as e:
-        print(f"Error: {e}")
-        bot.reply_to(message, "Произошла системная задержка. Повторите запрос.")
+        print(f"Chat error: {e}")
+        # Попытка уведомить пользователя о сбое API
+        try:
+            bot.reply_to(message, "Произошла временная системная задержка. Повторите запрос через несколько секунд.")
+        except:
+            pass
 
 def run_bot():
-    """Запуск с защитой от падений (Auto-restart)"""
-    print("[SYSTEM] Dr. Surf заступает на дежурство...")
+    """Запуск бота с комплексной защитой от падений и зависаний"""
+    print("[SYSTEM] Dr. Surf: Запуск системы максимальной защиты...")
     
+    # Предварительный сброс вебхуков для предотвращения конфликтов
+    try:
+        bot.remove_webhook()
+    except:
+        pass
+
     while True:
         try:
-            bot.polling(none_stop=True, interval=2, timeout=90)
+            # drop_pending_updates=True игнорирует сообщения, пришедшие, пока бот был оффлайн (защита от спам-лавины)
+            bot.polling(none_stop=True, interval=2, timeout=90, drop_pending_updates=True)
         except Exception as e:
-            print(f"[RESTART] Ошибка сети: {e}. Перезапуск через 5 сек...")
+            print(f"[RESTART] Обнаружен сбой: {e}. Регенерация через 5 сек...")
+            send_log(f"🆘 Система автоматически перезагружена после сбоя: {e}")
             time.sleep(5)
 
 if __name__ == "__main__":
-    threading.Thread(target=run_bot).start()
+    # Запуск бота в отдельном потоке
+    threading.Thread(target=run_bot, daemon=True).start()
+    
+    # Запуск Flask сервера для поддержания Uptime (Health Checks)
     port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    try:
+        app.run(host='0.0.0.0', port=port)
+    except Exception as e:
+        print(f"Flask error: {e}")
