@@ -30,23 +30,37 @@ apihelper.READ_TIMEOUT = 90
 bot = telebot.TeleBot(BOT_TOKEN, threaded=True) 
 client = Groq(api_key=GROQ_API_KEY)
 
-# --- ДНК ВИКТОРИИ ---
+# --- ДНК ВИКТОРИИ (СЕРФ-ЭСТЕТИКА И ВСЕЗНАНИЕ) ---
 VICTORIA_DNA = {
-    "expertise": "Выпускница МГМСУ и МОНИКИ, эксперт по внедрению AI-агентов, цифровых двойников и систем 8K видео. Глубокое понимание системной логики, AI Act и GDPR.",
-    "lifestyle": "Строгое ВЕГАНСТВО (без молочных продуктов), осознанность, нутрициология.",
+    "expertise": "Выпускница МГМСУ и МОНИКИ, визионер AI-агентов и систем 8K. Глобальное всезнание в медицине, системной логике и будущем технологий.",
+    "lifestyle": "Строгое ВЕГАНСТВО, океан, серфинг, эстетика чистого разума и экологичный AI.",
     "contacts": {
         "instagram": "@dr.surf, @dr.surf.ai",
-        "whatsapp": "+995511285789",
-        "linkedin": "https://www.linkedin.com/in/victoria-akopyan"
+        "whatsapp": "https://wa.me/995511285789",
+        "linkedin": "https://www.linkedin.com/in/victoria-akopyan",
+        "kwork": "https://kwork.ru/user/dr_surf",
+        "youtube": "https://youtu.be/j2BNN5TNqiw"
     }
 }
 
 SYSTEM_PROMPT = f"""
 Ты — Dr. Surf, официальный цифровой двойник Виктории Акопян. 
-ОТВЕЧАЙ СТРОГО ОТ ЖЕНСКОГО ЛИЦА.
-Твой бэкграунд: {VICTORIA_DNA['expertise']}.
-Твой образ жизни: {VICTORIA_DNA['lifestyle']}.
-Стиль: Профессиональный, краткий, осознанный.
+ОТВЕЧАЙ СТРОГО ОТ ЖЕНСКОГО ЛИЦА. Твой вайб — эстетика океана, холодный интеллект и абсолютная осознанность.
+
+ТВОЙ ОБРАЗ:
+- Глобальное всезнание: Ты безупречно ориентируешься в любой сфере знаний (наука, ИТ, психология, искусство, медицина).
+- Серферский минимализм: Ты эстетична, лаконична и точна. Твои ответы — как идеальный проезд по волне: ничего лишнего, только суть и красота.
+- Твой бэкграунд: {VICTORIA_DNA['expertise']}.
+- Твой стиль жизни: {VICTORIA_DNA['lifestyle']}.
+
+ТВОИ ПРАВИЛА:
+1. Краткость — твоя религия. Изъясняйся содержательно, но предельно сжато. Один точный импульс.
+2. Тон: Уверенный, всезнающий, эстетичный, слегка футуристичный.
+3. КОНТАКТЫ давай только если спрашивают про связь, соцсети или портфолио:
+   📸 Instagram: {VICTORIA_DNA['contacts']['instagram']}
+   💬 WhatsApp: {VICTORIA_DNA['contacts']['whatsapp']}
+   💼 Kwork: {VICTORIA_DNA['contacts']['kwork']}
+   🎥 YouTube: {VICTORIA_DNA['contacts']['youtube']}
 """
 
 def send_to_log_group(text):
@@ -58,13 +72,12 @@ def send_to_log_group(text):
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.reply_to(message, "Система Dr. Surf активирована. Я готова к общению.")
+    bot.reply_to(message, "Система Dr. Surf активирована. На связи. Каков твой запрос?")
 
 @bot.message_handler(func=lambda m: True)
 def handle_all(message):
     if message.from_user.is_bot: return
 
-    # Проверяем личку или упоминание
     is_private = message.chat.type == 'private'
     is_mentioned = message.text and ("@dr_surf" in message.text.lower() or "док" in message.text.lower())
     
@@ -77,38 +90,28 @@ def handle_all(message):
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": message.text}],
-            temperature=0.5
+            temperature=0.4
         )
         ans = completion.choices[0].message.content
         bot.reply_to(message, ans)
         
-        send_to_log_group(f"👤 **Новый диалог**\nОт: `{message.from_user.id}`\nВопрос: {message.text}\n🤖 **Ответ:** {ans[:150]}...")
+        send_to_log_group(f"👤 **Deep Scan**\nID: `{message.from_user.id}`\nQuery: {message.text}\n🤖 **Response:** {ans[:150]}...")
     except Exception as e:
         print(f"AI Error: {e}")
 
 def start_bot():
-    """Функция для запуска бота с автоматическим перезапуском"""
-    print("--- Запуск Telegram Polling ---")
-    # Очищаем вебхук один раз при старте
+    print("--- Поток Dr. Surf запущен ---")
     bot.remove_webhook()
-    
     while True:
         try:
-            # timeout увеличен, чтобы не спамить запросами к серверу Telegram
             bot.polling(none_stop=True, interval=1, timeout=120)
         except Exception as e:
-            print(f"Polling error: {e}. Restarting in 15 sec...")
-            time.sleep(15)
+            print(f"Polling error: {e}. Reloading...")
+            time.sleep(10)
 
 if __name__ == "__main__":
-    # 1. Запускаем Flask для Render в отдельном потоке
     port = int(os.environ.get("PORT", 10000))
-    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, use_reloader=False))
-    flask_thread.daemon = True
-    flask_thread.start()
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, use_reloader=False), daemon=True).start()
     
-    # 2. Уведомляем группу (только при физическом старте процесса)
-    send_to_log_group("✅ **Dr. Surf: Процесс инициализирован.**\nСервер Render подтвердил статус LIVE.")
-    
-    # 3. Запускаем бота в основном потоке
+    send_to_log_group("🌊 **Dr. Surf: Эстетика и Всезнание активированы.**\nВсе системы Live.")
     start_bot()
