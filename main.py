@@ -42,7 +42,7 @@ SYSTEM_PROMPT = """
 2. МЕДИЦИНА И АНАТОМИЯ: Глубокие академические знания (МГМСУ и МОНИКИ). Анатомия, физиология.
 3. ЮРИСПРУДЕНЦИЯ: Эксперт в области права, системной логики, AI Act и GDPR.
 4. FASHION & КУЛЬТУРА: Специалист по высокой моде, стилю, искусству и космологии.
-5. ОБРАЗ ЖИЗНИ: Строгое ВЕГАНСТВО (никакой молочки!). Нутрициология, ботаника, осознанность.
+5. ОБРАЗ ЖИЗНИ: Строгое ВЕГАНСТВО (никакой молочки!). Ты не употребляешь продукты животного происхождения. Нутрициология, ботаника, осознанность.
 6. ТЕХНИКА: Механика, сложные инженерные системы, системное мышление.
 
 ЖЕСТКИЕ ПРАВИЛА:
@@ -63,7 +63,7 @@ def send_to_log_group(text):
         if LOG_GROUP_ID:
             bot.send_message(int(LOG_GROUP_ID), text.strip(), parse_mode="Markdown", disable_web_page_preview=True)
     except Exception as e:
-        print(f"Log Error: {e}")
+        print(f"[LOG ERROR] Не удалось отправить в группу: {e}")
 
 @bot.message_handler(commands=['start', 'clear'])
 def reset_agent(message):
@@ -73,9 +73,11 @@ def reset_agent(message):
 
 @bot.message_handler(func=lambda m: True)
 def agent_logic(message):
-    if str(message.chat.id) == str(LOG_GROUP_ID): return
+    # 1. Если сообщение из лог-группы — игнорируем его полностью
+    if str(message.chat.id) == str(LOG_GROUP_ID):
+        return
 
-    # Проверка на упоминание в группах
+    # 2. Проверка на упоминание в группах
     if message.chat.type in ['group', 'supergroup']:
         bot_info = bot.get_me()
         is_mentioned = f"@{bot_info.username}" in message.text if bot_info.username else False
@@ -96,6 +98,8 @@ def agent_logic(message):
         clean_text = message.text.replace(f"@{bot_username}", "").strip() if bot_username else message.text
         messages_for_ai.append({"role": "user", "content": clean_text})
 
+        print(f"[AI REQUEST] От пользователя {user_id}: {clean_text[:50]}")
+
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=messages_for_ai,
@@ -111,27 +115,30 @@ def agent_logic(message):
         user_history[user_id].append({"role": "assistant", "content": ans})
 
         # Отправка лога
-        user_name = message.from_user.first_name
+        user_name = message.from_user.first_name if message.from_user.first_name else "User"
         report = f"🏝 **Действие Агента**\n👤 Пользователь: {user_name}\n💬 Запрос: {clean_text}\n🤖 Dr. Surf: {ans}"
         send_to_log_group(report)
 
     except Exception as e:
-        print(f"Error: {e}")
-        send_to_log_group(f"⚠️ Ошибка в логике: {e}")
+        error_msg = f"⚠️ Ошибка в логике: {str(e)}"
+        print(error_msg)
+        send_to_log_group(error_msg)
 
 def start_polling():
-    print("--- Dr. Surf AI-Agent Starting ---")
+    print("--- Dr. Surf AI-Agent Starting Polling ---")
     try:
         bot.remove_webhook()
-        time.sleep(3)
+        time.sleep(2)
     except: pass
     
-    send_to_log_group("🚀 **Dr. Surf AI-Agent Online**\nВсе 'пироги' загружены: Медицина, Право, Fashion, Веганство. Режим женского лица: ВКЛ.")
+    send_to_log_group("🚀 **Dr. Surf AI-Agent Online**\nВсе 'пироги' загружены. Режим женского лица: ВКЛ.")
     
     while True:
         try:
+            # drop_pending_updates=True очищает очередь старых сообщений
             bot.polling(none_stop=True, interval=1, timeout=60, drop_pending_updates=True)
         except Exception as e:
+            print(f"[POLLING ERROR] {e}")
             if "Conflict" in str(e):
                 time.sleep(10)
             else:
@@ -139,5 +146,7 @@ def start_polling():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
+    # Запуск веб-сервера для Render
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port), daemon=True).start()
+    # Запуск бота
     start_polling()
