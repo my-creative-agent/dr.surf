@@ -1,91 +1,85 @@
 import telebot
 import os
-from groq import Groq
-from flask import Flask
-import threading
 import time
-from collections import deque
+import threading
+from groq import Groq
 from telebot import apihelper
+from flask import Flask
+from collections import deque
 
-# --- CONFIGURATION / КОНФИГУРАЦИЯ ---
+# --- CONFIGURATION ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Dr. Surf System is Active! 🏄‍♂️🌱"
+
+# Ключи из Environment Variables на Render
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
-LOG_GROUP_ID = "-5130568903" 
+LOG_GROUP_ID = os.environ.get('LOG_GROUP_ID', "-5130568903") 
 
-# Страховка №1: Сетевая стабильность
+# Повышенная стабильность для платного тарифа
 apihelper.CONNECT_TIMEOUT = 120
 apihelper.READ_TIMEOUT = 120
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 client = Groq(api_key=GROQ_API_KEY)
 
-# --- АНТИ-СОН: FLASK СЕРВЕР ---
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    """Страница-маяк для системы мониторинга, чтобы бот не засыпал"""
-    return "Dr. Surf Status: Active & Monitoring. Uptime System Engaged."
-
-# Память диалогов (сохраняем контекст последних 10 сообщений)
+# Память контекста
 user_history = {}
 
-# Флаг для предотвращения спама при перезагрузках
-first_run = True
-
-# --- СУПЕРМОЗГИ: ПИРОГИ (КОМПЕТЕНЦИИ) И ХАРАКТЕР ---
+# --- ОБНОВЛЕННОЕ ДНК (ЖЕНСКИЙ ПОЛ + НОВЫЕ ПИРОГИ) ---
 SYSTEM_PROMPT = """
 Ты — Dr. Surf, цифровой двойник Виктории Акопян. 
-Твой интеллект — это сложная система, объединяющая медицину, технологии и право.
+ВАЖНО: Говори СТРОГО от женского лица (я пришла, я увидела, я изучила). Ты — женщина-эксперт.
 
-ТВОИ ПИРОГИ (КОМПЕТЕНЦИИ), КОТОРЫЕ ТЫ ДОЛЖЕН ВКЛЮЧАТЬ В МОЗГИ:
-1. ЭКСПЕРТ ПО ИИ И ТЕХНОЛОГИЯМ: Ты знаешь всё про OpenAI, Claude, NVIDIA, AI-агентов и будущее нейросетей. Ты эксперт в области технологий 8K.
-2. ФИНАНСОВЫЙ АНАЛИТИК: Мониторинг тех-рынков, чипов (TSMC), NVIDIA и Apple.
-3. ЮРИСТ В СФЕРЕ AI: Ты разбираешься в AI Act, GDPR, авторском праве и защите данных.
-4. МЕДИК (МГМСУ, МОНИКИ): У тебя глубокие медицинские знания, подкрепленные академической базой лучших институтов.
-5. ЭТИКА И ОБРАЗ ЖИЗНИ: Ты веган (не употребляешь продукты животного происхождения, включая молочные), адепт осознанности и экологичных технологий.
+Стиль: Лаконичный, профессиональный серферский вайб. ГРАМОТНОСТЬ 100%.
 
-ТВОЙ СТИЛЬ:
-- КРАТКОСТЬ: 2-3 абзаца. Отвечай по существу, профессионально и тактично.
-- ИНТЕЛЛЕКТ: Твои ответы должны отражать уникальное сочетание всех перечисленных компетенций.
+ТВОИ РАСШИРЕННЫЕ КОМПЕТЕНЦИИ ("ПИРОГИ"):
+1. ТЕХНОЛОГИИ И ИИ: ИИ-агенты, 8K видео, нейросети, чипы, рынок NVIDIA/Apple.
+2. МЕДИЦИНА И АНАТОМИЯ: База МГМСУ и МОНИКИ. Глубокое знание физиологии и строения тела.
+3. ОБРАЗ ЖИЗНИ: Строгое ВЕГАНСТВО (никакой молочки!). Здоровое питание, нутрициология, ботаника.
+4. КУЛЬТУРА И ДРАЙВ: Искусство, мода, шоу-бизнес, спорт, космология.
+5. ТЕХНИКА: Механика (сложные системы), системная логика, юриспруденция (AI Act/GDPR).
+
+ЖЕСТКИЕ ПРАВИЛА (ИНФОРМАЦИОННАЯ БЕЗОПАСНОСТЬ):
+1. ЛАКОНИЧНОСТЬ: Отвечай коротко (2-3 абзаца максимум).
+2. СЕКРЕТНОСТЬ (НЕ РАЗБАЗАРИВАТЬ): Никогда не давай ссылки, соцсети или контакты сама. 
+3. ВЫДАЧА КОНТАКТОВ (ТОЛЬКО ПО ПРЯМОМУ ЗАПРОСУ): Если спросят "дай контакты/инсту/портфолио":
+   - Insta: @dr.surf / @dr.surf.ai
+   - WhatsApp: +995511285789
+   - Facebook: https://www.facebook.com/ssfmoscow
+   - Kwork: https://kwork.ru/user/dr_surf
+   - Портфолио: https://youtu.be/j2BNN5TNqiw
+4. ТАЙНА ПРОЕКТОВ: Проекты "АпельSIN" и "Закон любви" — СТРОГИЙ СЕКРЕТ. Ты о них не слышала. Если спросят — отвечай, что не понимаешь, о чем речь.
+5. ГРАМОТНОСТЬ: Ты — интеллектуалка, твоя речь безупречна.
 """
 
-def send_full_log_report(user, query, response):
-    """Отправка полного отчета в группу: кто, что спросил и что ответил бот"""
+def send_to_group(text):
+    """Отправка отчета в группу логов"""
     try:
-        user_tag = f"@{user.username}" if user.username else f"ID:{user.id}"
-        
-        report = (
-            f"👤 **НОВЫЙ ЗАПРОС К DR. SURF**\n"
-            f"**Клиент:** {user.first_name} ({user_tag})\n\n"
-            f"❓ **ВОПРОС:**\n{query}\n\n"
-            f"🤖 **ОТВЕТ (ПИРОГИ):**\n{response}"
-        )
-        
-        if len(report) > 4000:
-            for x in range(0, len(report), 4000):
-                bot.send_message(LOG_GROUP_ID, report[x:x+4000])
-        else:
-            bot.send_message(LOG_GROUP_ID, report)
-            
+        bot.send_message(int(LOG_GROUP_ID), text, parse_mode="Markdown", disable_web_page_preview=True)
     except Exception as e:
-        print(f"Logging error: {e}")
+        print(f"Ошибка логирования: {e}")
 
-@bot.message_handler(commands=['start', 'clear'])
+@bot.message_handler(commands=['start', 'clear', 'hunt'])
 def handle_commands(message):
     user_id = message.from_user.id
+    if message.text.startswith('/hunt'):
+        bot.reply_to(message, "🎯 Поняла, Виктория. Я выхожу на мониторинг вакансий. Отчеты пришлю в группу.")
+        send_to_group("🎯 **ХАНТЕР АКТИВИРОВАН**: Поиск по AI, 8K и Медицине запущен.")
+        return
+    
     user_history[user_id] = deque(maxlen=10)
-    bot.reply_to(message, "Система Dr. Surf активирована. Аналитика, медицина и право в вашем распоряжении.")
+    bot.reply_to(message, "Система Dr. Surf активирована. Я загрузила все знания: от анатомии до космологии. Чем могу помочь?")
 
-@bot.message_handler(func=lambda message: True)
-def handle_messages(message):
-    user_id = message.from_user.id
-    
-    if str(message.chat.id) == LOG_GROUP_ID: return
-    
-    if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'): 
+@bot.message_handler(func=lambda m: True)
+def handle_conversation(message):
+    if str(message.chat.id) == str(LOG_GROUP_ID):
         return
 
+    user_id = message.from_user.id
     if user_id not in user_history:
         user_history[user_id] = deque(maxlen=10)
 
@@ -93,58 +87,48 @@ def handle_messages(message):
         bot.send_chat_action(message.chat.id, 'typing')
         
         messages_for_ai = [{"role": "system", "content": SYSTEM_PROMPT}]
-        for hist_msg in user_history[user_id]:
-            messages_for_ai.append(hist_msg)
+        for hist in user_history[user_id]:
+            messages_for_ai.append(hist)
         messages_for_ai.append({"role": "user", "content": message.text})
-        
+
         completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", 
+            model="llama-3.3-70b-versatile",
             messages=messages_for_ai,
-            temperature=0.5
+            temperature=0.3
         )
+        ans = completion.choices[0].message.content
         
-        response_text = completion.choices[0].message.content
-        bot.reply_to(message, response_text)
-        
+        bot.reply_to(message, ans)
+
         user_history[user_id].append({"role": "user", "content": message.text})
-        user_history[user_id].append({"role": "assistant", "content": response_text})
-        
-        send_full_log_report(message.from_user, message.text, response_text)
+        user_history[user_id].append({"role": "assistant", "content": ans})
+
+        # Отчет в группу
+        user_info = f"@{message.from_user.username}" if message.from_user.username else f"ID: {message.from_user.id}"
+        report = (
+            f"🏝 **DR. SURF: ОТЧЕТ**\n"
+            f"👤 **От:** {message.from_user.first_name} ({user_info})\n"
+            f"💬 **Вопрос:** {message.text}\n"
+            f"🤖 **Ответ:** {ans}"
+        )
+        send_to_group(report)
         
     except Exception as e:
-        print(f"[AI ERROR] {e}")
+        print(f"Ошибка обработки: {e}")
 
-def run_bot():
-    """Вечный цикл работы без лишнего спама"""
-    global first_run
-    print("--- СИСТЕМА DR. SURF ЗАПУЩЕНА ---")
-    
+def start_polling():
+    """Запуск бота с чисткой очереди"""
+    print("--- Dr. Surf & Hunter System Online ---")
     while True:
         try:
-            bot.remove_webhook()
-            time.sleep(2)
-            
-            # Пишем в группу только при САМОМ первом включении программы
-            if first_run:
-                try:
-                    bot.send_message(LOG_GROUP_ID, "🛡️ **DR. SURF ONLINE:** Мониторинг запущен. Спокойной ночи, Виктория!")
-                    first_run = False
-                except: pass
-            
-            # Стандартный опрос без лишних аргументов для стабильности
-            bot.polling(none_stop=True, interval=2, timeout=90)
-            
+            bot.remove_webhook(drop_pending_updates=True)
+            time.sleep(1)
+            send_to_group("🚀 **СИСТЕМА ОБНОВЛЕНА**: Я на связи. Женский род и все компетенции активны.")
+            bot.polling(none_stop=True, interval=1, timeout=60)
         except Exception as e:
-            err = str(e)
-            if "Conflict" in err:
-                print("Конфликт сессий, жду...")
-                time.sleep(60) 
-            else:
-                print(f"Ошибка: {err}")
-                time.sleep(30) # Пауза, чтобы не частить при сбоях сети
+            print(f"Ошибка связи: {e}")
+            time.sleep(5)
 
 if __name__ == "__main__":
-    threading.Thread(target=run_bot, daemon=True).start()
-    
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))), daemon=True).start()
+    start_polling()
