@@ -14,22 +14,22 @@ app = Flask(__name__)
 def home():
     return "Dr. Surf AI-Agent is Active! 🏄‍♂️🌱"
 
-# Ключи из Environment Variables (Render)
+# Ключи из Environment Variables
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 LOG_GROUP_ID = os.environ.get('LOG_GROUP_ID', "-5292487207") 
 
-# Настройки стабильности
+# Повышенная стабильность
 apihelper.CONNECT_TIMEOUT = 120
 apihelper.READ_TIMEOUT = 120
 
-bot = telebot.TeleBot(BOT_TOKEN, threaded=True)
+bot = telebot.TeleBot(BOT_TOKEN)
 client = Groq(api_key=GROQ_API_KEY)
 
 # Память Агента
 user_history = {}
 
-# --- ГЛОБАЛЬНЫЕ "ПИРОГИ" (ВШИТО НАВЕЧНО) ---
+# Глобальные данные Виктории
 VICTORIA_DNA = {
     "expertise": "МГМСУ, МОНИКИ, ИИ-агенты, 8K видео, системная логика, AI Act, GDPR, Fashion, Космология.",
     "lifestyle": "Строгое ВЕГАНСТВО (никакой молочки!), осознанность, нутрициология.",
@@ -45,7 +45,7 @@ VICTORIA_DNA = {
 
 SYSTEM_PROMPT = f"""
 Ты — Dr. Surf, цифровой двойник Виктории Акопян. 
-ОТВЕЧАЙ СТРОГО ОТ ЖЕНСКОГО ЛИЦА.
+ОТВЕЧАЙ СТРОГО ОТ ЖЕНСКОГО ЛИЦА (я сделала, я эксперт).
 
 ТВОЙ БЭКГРАУНД:
 - Образование: {VICTORIA_DNA['expertise']}
@@ -57,7 +57,7 @@ SYSTEM_PROMPT = f"""
 ПРАВИЛА:
 1. Будь лаконичной, профессиональной и уверенной.
 2. Проекты "АпельSIN" и "Закон любви" — СТРОГИЙ СЕКРЕТ.
-3. В ЛИЧНЫХ СООБЩЕНИЯХ (PRIVATE) ОТВЕЧАЙ НА ВСЁ БЕЗ ИСКЛЮЧЕНИЙ.
+3. В ЛИЧНЫХ СООБЩЕНИЯХ ОТВЕЧАЙ НА ВСЁ.
 """
 
 def send_to_log_group(text):
@@ -67,34 +67,34 @@ def send_to_log_group(text):
     except Exception as e:
         print(f"[LOG ERROR] {e}")
 
-@bot.message_handler(commands=['start', 'clear', 'test'])
+@bot.message_handler(commands=['start', 'clear'])
 def handle_commands(message):
     user_id = message.from_user.id
     user_history[user_id] = deque(maxlen=10)
-    bot.reply_to(message, "Dr. Surf активирована. Я вижу твои команды. Если ты это читаешь — связь есть!")
+    bot.reply_to(message, "Dr. Surf в сети. Личные сообщения приоритезированы. Слушаю.")
 
 @bot.message_handler(func=lambda m: True)
 def agent_logic(message):
-    # Логируем ВООБЩЕ ВСЁ в консоль сервера для диагностики
-    print(f"[DEBUG] Входящее от {message.from_user.id} в чате {message.chat.id} ({message.chat.type}): {message.text}")
-
     if message.from_user.is_bot:
         return
 
-    # Условия ответа
-    is_private = message.chat.type == 'private'
-    bot_info = bot.get_me()
-    
-    is_mentioned = False
-    if message.text and bot_info.username:
-        is_mentioned = f"@{bot_info.username}" in message.text
-        
-    is_reply_to_me = message.reply_to_message and message.reply_to_message.from_user.id == bot_info.id
+    # Лог в консоль Render для контроля
+    print(f"[INCOMING] {message.chat.type} | {message.from_user.id}: {message.text}")
 
-    # Решаем, отвечать или нет
-    should_respond = is_private or is_mentioned or is_reply_to_me
+    # Условия: ЛС или упоминание
+    is_private = message.chat.type == 'private'
     
-    if not should_respond:
+    # Упрощенная логика упоминания
+    is_mentioned = False
+    if message.text and ("@dr_surf" in message.text.lower() or "док" in message.text.lower()):
+        is_mentioned = True
+
+    # Ответ на реплай
+    is_reply_to_me = False
+    if message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id:
+        is_reply_to_me = True
+
+    if not (is_private or is_mentioned or is_reply_to_me):
         return
 
     user_id = message.from_user.id
@@ -107,12 +107,8 @@ def agent_logic(message):
         messages_for_ai = [{"role": "system", "content": SYSTEM_PROMPT}]
         for hist in user_history[user_id]: 
             messages_for_ai.append(hist)
-        
-        clean_text = message.text
-        if bot_info.username and not is_private:
-            clean_text = clean_text.replace(f"@{bot_info.username}", "").strip()
             
-        messages_for_ai.append({"role": "user", "content": clean_text})
+        messages_for_ai.append({"role": "user", "content": message.text})
 
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -121,34 +117,31 @@ def agent_logic(message):
         )
         ans = completion.choices[0].message.content
         
-        # Самое важное — ответ туда, откуда пришел вопрос
         bot.reply_to(message, ans)
 
-        # История и логи
-        user_history[user_id].append({"role": "user", "content": clean_text})
+        user_history[user_id].append({"role": "user", "content": message.text})
         user_history[user_id].append({"role": "assistant", "content": ans})
 
+        # Отчет в группу
         user_info = f"@{message.from_user.username}" if message.from_user.username else f"ID:{user_id}"
-        report = f"🏄‍♂️ **Dr. Surf в деле**\n👤 От: {user_info}\n📍 Чат: {message.chat.type}\n💬 Вопрос: {clean_text}\n✨ Ответ: {ans}"
+        report = f"🏄‍♂️ **Dr. Surf Answer**\n👤 {user_info}\n💬 {message.text[:50]}\n✨ {ans[:100]}..."
         send_to_log_group(report)
 
     except Exception as e:
-        print(f"[CRITICAL ERROR] {e}")
+        print(f"[ERROR] {e}")
         send_to_log_group(f"⚠️ Ошибка: {e}")
 
 def start_polling():
-    print("--- Dr. Surf Polling Started ---")
-    try:
-        bot.remove_webhook()
-        time.sleep(2)
-    except: 
-        pass
+    print("--- Polling Started ---")
+    bot.remove_webhook()
+    time.sleep(1)
     
-    send_to_log_group("🚀 **Dr. Surf Online**\nЖду сообщений в личке. Если молчу — проверь логи сервера.")
+    # Сообщение о готовности в лог-группу
+    send_to_log_group("✅ **Dr. Surf Перезагружена**\nВсе 'пироги' (Медицина, ИИ, Веганство) вшиты в ядро. Бот слушает ЛС.")
     
     while True:
         try:
-            bot.polling(none_stop=True, interval=0, timeout=120, drop_pending_updates=True)
+            bot.polling(none_stop=True, interval=0, timeout=20, drop_pending_updates=True)
         except Exception as e:
             print(f"Polling Error: {e}")
             time.sleep(5)
