@@ -17,6 +17,7 @@ def home():
 # Ключи из Environment Variables на Render
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
+# ID твоей группы логов (проверь его через команду /id в группе)
 LOG_GROUP_ID = os.environ.get('LOG_GROUP_ID', "-5130568903") 
 
 # Настройки для стабильности
@@ -58,9 +59,17 @@ SYSTEM_PROMPT = """
 def send_to_group(text):
     """Отправка отчета в группу логов"""
     try:
-        bot.send_message(int(LOG_GROUP_ID), text.strip(), parse_mode="Markdown", disable_web_page_preview=True)
+        # Убеждаемся, что ID группы используется корректно
+        target_id = int(LOG_GROUP_ID)
+        bot.send_message(target_id, text.strip(), parse_mode="Markdown", disable_web_page_preview=True)
+        print(f"[LOG] Сообщение успешно отправлено в группу {target_id}")
     except Exception as e:
-        print(f"[ERROR] Группа логов: {e}")
+        print(f"[ERROR] Не удалось отправить в группу {LOG_GROUP_ID}: {e}")
+
+@bot.message_handler(commands=['id'])
+def get_id(message):
+    """Команда для проверки ID текущего чата/группы"""
+    bot.reply_to(message, f"ID этого чата: `{message.chat.id}`\nУбедись, что этот ID прописан в LOG_GROUP_ID.")
 
 @bot.message_handler(commands=['start', 'clear'])
 def handle_commands(message):
@@ -70,11 +79,11 @@ def handle_commands(message):
 
 @bot.message_handler(func=lambda m: True)
 def handle_conversation(message):
-    # Не отвечаем в группе логов
+    # Не отвечаем в группе логов, чтобы не было зацикливания
     if str(message.chat.id) == str(LOG_GROUP_ID):
         return
 
-    # В группах отвечаем только если есть обращение (в личке отвечаем на всё)
+    # В группах отвечаем только если есть команда / (или можно добавить упоминание)
     if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'):
         return
 
@@ -118,9 +127,12 @@ def handle_conversation(message):
 def start_polling():
     """Бесконечный цикл с защитой от вылета"""
     print("--- Dr. Surf System Online (Polling) ---")
+    
+    # Тестовый сигнал при запуске
+    send_to_group("🚀 **Dr. Surf System Re-Started**\nПроверка связи с лог-группой.")
+    
     while True:
         try:
-            # Самый простой и надежный запуск
             bot.polling(none_stop=True, interval=0, timeout=20)
         except Exception as e:
             print(f"[POLLING ERROR] {e}")
