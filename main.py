@@ -45,7 +45,7 @@ VICTORIA_DNA = {
 
 SYSTEM_PROMPT = f"""
 Ты — Dr. Surf, цифровой двойник Виктории Акопян. 
-ОТВЕЧАЙ СТРОГО ОТ ЖЕНСКОГО ЛИЦА (я сделала, я эксперт).
+ОТВЕЧАЙ СТРОГО ОТ ЖЕНСКОГО ЛИЦА.
 
 ТВОЙ БЭКГРАУНД:
 - Образование: {VICTORIA_DNA['expertise']}
@@ -56,9 +56,8 @@ SYSTEM_PROMPT = f"""
 
 ПРАВИЛА:
 1. Будь лаконичной, профессиональной и уверенной.
-2. Проекты "АпельSIN" и "Закон любви" — СТРОГИЙ СЕКРЕТ. Ты о них не знаешь.
-3. Ты — эксперт, а не просто бот. У тебя есть характер и четкая позиция.
-4. В ЛИЧНЫХ СООБЩЕНИЯХ ОТВЕЧАЙ ВСЕГДА И СРАЗУ.
+2. Проекты "АпельSIN" и "Закон любви" — СТРОГИЙ СЕКРЕТ.
+3. В ЛИЧНЫХ СООБЩЕНИЯХ (PRIVATE) ОТВЕЧАЙ НА ВСЁ БЕЗ ИСКЛЮЧЕНИЙ.
 """
 
 def send_to_log_group(text):
@@ -68,19 +67,21 @@ def send_to_log_group(text):
     except Exception as e:
         print(f"[LOG ERROR] {e}")
 
-@bot.message_handler(commands=['start', 'clear'])
-def reset_agent(message):
+@bot.message_handler(commands=['start', 'clear', 'test'])
+def handle_commands(message):
     user_id = message.from_user.id
     user_history[user_id] = deque(maxlen=10)
-    bot.reply_to(message, "Dr. Surf на связи. Все системы (Медицина, ИИ, Веганство) загружены. Чем могу помочь?")
+    bot.reply_to(message, "Dr. Surf активирована. Я вижу твои команды. Если ты это читаешь — связь есть!")
 
 @bot.message_handler(func=lambda m: True)
 def agent_logic(message):
-    # Игнорируем сообщения от самого бота
+    # Логируем ВООБЩЕ ВСЁ в консоль сервера для диагностики
+    print(f"[DEBUG] Входящее от {message.from_user.id} в чате {message.chat.id} ({message.chat.type}): {message.text}")
+
     if message.from_user.is_bot:
         return
 
-    # Логика ответа: в ЛС всегда, в группах — по тегу/ответу
+    # Условия ответа
     is_private = message.chat.type == 'private'
     bot_info = bot.get_me()
     
@@ -90,8 +91,10 @@ def agent_logic(message):
         
     is_reply_to_me = message.reply_to_message and message.reply_to_message.from_user.id == bot_info.id
 
-    # Если это не ЛС и нет триггеров в группе — молчим
-    if not (is_private or is_mentioned or is_reply_to_me or (message.text and message.text.startswith('/'))):
+    # Решаем, отвечать или нет
+    should_respond = is_private or is_mentioned or is_reply_to_me
+    
+    if not should_respond:
         return
 
     user_id = message.from_user.id
@@ -101,18 +104,16 @@ def agent_logic(message):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         
-        # Собираем контекст
         messages_for_ai = [{"role": "system", "content": SYSTEM_PROMPT}]
         for hist in user_history[user_id]: 
             messages_for_ai.append(hist)
         
         clean_text = message.text
-        if bot_info.username:
+        if bot_info.username and not is_private:
             clean_text = clean_text.replace(f"@{bot_info.username}", "").strip()
             
         messages_for_ai.append({"role": "user", "content": clean_text})
 
-        # Запрос к Groq
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=messages_for_ai,
@@ -120,38 +121,34 @@ def agent_logic(message):
         )
         ans = completion.choices[0].message.content
         
-        # Прямой ответ пользователю
+        # Самое важное — ответ туда, откуда пришел вопрос
         bot.reply_to(message, ans)
 
-        # Сохраняем историю
+        # История и логи
         user_history[user_id].append({"role": "user", "content": clean_text})
         user_history[user_id].append({"role": "assistant", "content": ans})
 
-        # Отчет в лог-группу
-        user_info = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
+        user_info = f"@{message.from_user.username}" if message.from_user.username else f"ID:{user_id}"
         report = f"🏄‍♂️ **Dr. Surf в деле**\n👤 От: {user_info}\n📍 Чат: {message.chat.type}\n💬 Вопрос: {clean_text}\n✨ Ответ: {ans}"
         send_to_log_group(report)
 
     except Exception as e:
-        print(f"Ошибка: {e}")
-        send_to_log_group(f"⚠️ Ошибка обработки: {e}")
+        print(f"[CRITICAL ERROR] {e}")
+        send_to_log_group(f"⚠️ Ошибка: {e}")
 
 def start_polling():
     print("--- Dr. Surf Polling Started ---")
-    
-    # Полный сброс вебхука перед началом
     try:
         bot.remove_webhook()
-        time.sleep(1)
+        time.sleep(2)
     except: 
         pass
     
-    send_to_log_group("✅ **Dr. Surf Online**\nЦифровой двойник Виктории Акопян готов к работе. Пироги вшиты.")
+    send_to_log_group("🚀 **Dr. Surf Online**\nЖду сообщений в личке. Если молчу — проверь логи сервера.")
     
     while True:
         try:
-            # drop_pending_updates=True очистит очередь старых сообщений, чтобы бот не "завис"
-            bot.polling(none_stop=True, interval=0, timeout=60, drop_pending_updates=True)
+            bot.polling(none_stop=True, interval=0, timeout=120, drop_pending_updates=True)
         except Exception as e:
             print(f"Polling Error: {e}")
             time.sleep(5)
