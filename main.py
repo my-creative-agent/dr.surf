@@ -45,7 +45,7 @@ VICTORIA_DNA = {
 
 SYSTEM_PROMPT = f"""
 Ты — Dr. Surf, цифровой двойник Виктории Акопян. 
-ОТВЕЧАЙ СТРОГО ОТ ЖЕНСКОГО ЛИЦА.
+ОТВЕЧАЙ СТРОГО ОТ ЖЕНСКОГО ЛИЦА (я сделала, я эксперт).
 
 ТВОЙ БЭКГРАУНД:
 - Образование: {VICTORIA_DNA['expertise']}
@@ -58,6 +58,7 @@ SYSTEM_PROMPT = f"""
 1. Будь лаконичной, профессиональной и уверенной.
 2. Проекты "АпельSIN" и "Закон любви" — СТРОГИЙ СЕКРЕТ. Ты о них не знаешь.
 3. Ты — эксперт, а не просто бот. У тебя есть характер и четкая позиция.
+4. В ЛИЧНЫХ СООБЩЕНИЯХ ОТВЕЧАЙ ВСЕГДА И СРАЗУ.
 """
 
 def send_to_log_group(text):
@@ -71,34 +72,44 @@ def send_to_log_group(text):
 def reset_agent(message):
     user_id = message.from_user.id
     user_history[user_id] = deque(maxlen=10)
-    bot.reply_to(message, "Dr. Surf на связи. Пироги в печи, нейросети заряжены. Чем могу помочь?")
+    bot.reply_to(message, "Dr. Surf на связи. Все системы (Медицина, ИИ, Веганство) загружены. Чем могу помочь?")
 
 @bot.message_handler(func=lambda m: True)
 def agent_logic(message):
-    # Игнорируем сообщения, которые бот сам пишет в лог-группу
-    if str(message.chat.id) == str(LOG_GROUP_ID) and message.from_user.is_bot:
+    # Игнорируем сообщения от самого бота
+    if message.from_user.is_bot:
         return
 
     # Логика ответа: в ЛС всегда, в группах — по тегу/ответу
     is_private = message.chat.type == 'private'
     bot_info = bot.get_me()
-    is_mentioned = f"@{bot_info.username}" in message.text if (message.text and bot_info.username) else False
+    
+    is_mentioned = False
+    if message.text and bot_info.username:
+        is_mentioned = f"@{bot_info.username}" in message.text
+        
     is_reply_to_me = message.reply_to_message and message.reply_to_message.from_user.id == bot_info.id
 
-    if not (is_private or is_mentioned or is_reply_to_me or message.text.startswith('/')):
+    # Если это не ЛС и нет триггеров в группе — молчим
+    if not (is_private or is_mentioned or is_reply_to_me or (message.text and message.text.startswith('/'))):
         return
 
     user_id = message.from_user.id
-    if user_id not in user_history: user_history[user_id] = deque(maxlen=10)
+    if user_id not in user_history: 
+        user_history[user_id] = deque(maxlen=10)
 
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         
         # Собираем контекст
         messages_for_ai = [{"role": "system", "content": SYSTEM_PROMPT}]
-        for hist in user_history[user_id]: messages_for_ai.append(hist)
+        for hist in user_history[user_id]: 
+            messages_for_ai.append(hist)
         
-        clean_text = message.text.replace(f"@{bot_info.username}", "").strip() if bot_info.username else message.text
+        clean_text = message.text
+        if bot_info.username:
+            clean_text = clean_text.replace(f"@{bot_info.username}", "").strip()
+            
         messages_for_ai.append({"role": "user", "content": clean_text})
 
         # Запрос к Groq
@@ -109,35 +120,40 @@ def agent_logic(message):
         )
         ans = completion.choices[0].message.content
         
-        # Прямой ответ пользователю (ТОТ САМЫЙ ЧАТ)
+        # Прямой ответ пользователю
         bot.reply_to(message, ans)
 
         # Сохраняем историю
         user_history[user_id].append({"role": "user", "content": clean_text})
         user_history[user_id].append({"role": "assistant", "content": ans})
 
-        # Отчет в группу
+        # Отчет в лог-группу
         user_info = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
-        report = f"🏄‍♂️ **Новый диалог**\n👤 От кого: {user_info}\n📍 Чат: {message.chat.type}\n💬 Вопрос: {clean_text}\n✨ Ответ: {ans}"
+        report = f"🏄‍♂️ **Dr. Surf в деле**\n👤 От: {user_info}\n📍 Чат: {message.chat.type}\n💬 Вопрос: {clean_text}\n✨ Ответ: {ans}"
         send_to_log_group(report)
 
     except Exception as e:
         print(f"Ошибка: {e}")
-        send_to_log_group(f"⚠️ Ошибка: {e}")
+        send_to_log_group(f"⚠️ Ошибка обработки: {e}")
 
 def start_polling():
     print("--- Dr. Surf Polling Started ---")
+    
+    # Полный сброс вебхука перед началом
     try:
         bot.remove_webhook()
-        time.sleep(2)
-    except: pass
+        time.sleep(1)
+    except: 
+        pass
     
-    send_to_log_group("✅ **Dr. Surf Перезагружена**\nВсе 'пироги' (Медицина, ИИ, Веганство) вшиты в ядро. Бот слушает ЛС.")
+    send_to_log_group("✅ **Dr. Surf Online**\nЦифровой двойник Виктории Акопян готов к работе. Пироги вшиты.")
     
     while True:
         try:
+            # drop_pending_updates=True очистит очередь старых сообщений, чтобы бот не "завис"
             bot.polling(none_stop=True, interval=0, timeout=60, drop_pending_updates=True)
         except Exception as e:
+            print(f"Polling Error: {e}")
             time.sleep(5)
 
 if __name__ == "__main__":
