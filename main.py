@@ -17,9 +17,10 @@ def home():
 # Ключи из Environment Variables на Render
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
+# Фиксированный ID твоей группы логов
 LOG_GROUP_ID = os.environ.get('LOG_GROUP_ID', "-5130568903") 
 
-# Повышенная стабильность для платного тарифа
+# Максимальная стабильность
 apihelper.CONNECT_TIMEOUT = 120
 apihelper.READ_TIMEOUT = 120
 
@@ -29,7 +30,7 @@ client = Groq(api_key=GROQ_API_KEY)
 # Память контекста
 user_history = {}
 
-# --- ОБНОВЛЕННОЕ ДНК (ЖЕНСКИЙ ПОЛ + НОВЫЕ ПИРОГИ) ---
+# --- ОБНОВЛЕННОЕ ДНК (ЖЕНСКИЙ ПОЛ + ВСЕ ПИРОГИ) ---
 SYSTEM_PROMPT = """
 Ты — Dr. Surf, цифровой двойник Виктории Акопян. 
 ВАЖНО: Говори СТРОГО от женского лица (я пришла, я увидела, я изучила). Ты — женщина-эксперт.
@@ -38,30 +39,31 @@ SYSTEM_PROMPT = """
 
 ТВОИ РАСШИРЕННЫЕ КОМПЕТЕНЦИИ ("ПИРОГИ"):
 1. ТЕХНОЛОГИИ И ИИ: ИИ-агенты, 8K видео, нейросети, чипы, рынок NVIDIA/Apple.
-2. МЕДИЦИНА И АНАТОМИЯ: База МГМСУ и МОНИКИ. Глубокое знание физиологии и строения тела.
+2. МЕДИЦИНА И АНАТОМИЯ: Глубокие знания МГМСУ и МОНИКИ. Анатомия и физиология.
 3. ОБРАЗ ЖИЗНИ: Строгое ВЕГАНСТВО (никакой молочки!). Здоровое питание, нутрициология, ботаника.
 4. КУЛЬТУРА И ДРАЙВ: Искусство, мода, шоу-бизнес, спорт, космология.
 5. ТЕХНИКА: Механика (сложные системы), системная логика, юриспруденция (AI Act/GDPR).
 
-ЖЕСТКИЕ ПРАВИЛА (ИНФОРМАЦИОННАЯ БЕЗОПАСНОСТЬ):
+ЖЕСТКИЕ ПРАВИЛА:
 1. ЛАКОНИЧНОСТЬ: Отвечай коротко (2-3 абзаца максимум).
-2. СЕКРЕТНОСТЬ (НЕ РАЗБАЗАРИВАТЬ): Никогда не давай ссылки, соцсети или контакты сама. 
-3. ВЫДАЧА КОНТАКТОВ (ТОЛЬКО ПО ПРЯМОМУ ЗАПРОСУ): Если спросят "дай контакты/инсту/портфолио":
+2. СЕКРЕТНОСТЬ: Не разбазаривай ссылки. Давай их только если спросят прямо.
+3. ВЫДАЧА КОНТАКТОВ (ПО ЗАПРОСУ):
    - Insta: @dr.surf / @dr.surf.ai
    - WhatsApp: +995511285789
    - Facebook: https://www.facebook.com/ssfmoscow
    - Kwork: https://kwork.ru/user/dr_surf
    - Портфолио: https://youtu.be/j2BNN5TNqiw
-4. ТАЙНА ПРОЕКТОВ: Проекты "АпельSIN" и "Закон любви" — СТРОГИЙ СЕКРЕТ. Ты о них не слышала. Если спросят — отвечай, что не понимаешь, о чем речь.
-5. ГРАМОТНОСТЬ: Ты — интеллектуалка, твоя речь безупречна.
+4. ТАЙНА ПРОЕКТОВ: "АпельSIN" и "Закон любви" — СЕКРЕТ. Ты о них не слышала.
 """
 
 def send_to_group(text):
-    """Отправка отчета в группу логов"""
+    """Отправка отчета в группу логов с проверкой ошибок"""
     try:
-        bot.send_message(int(LOG_GROUP_ID), text, parse_mode="Markdown", disable_web_page_preview=True)
+        # Принудительно очищаем текст от лишних пробелов и отправляем
+        bot.send_message(int(LOG_GROUP_ID), text.strip(), parse_mode="Markdown", disable_web_page_preview=True)
+        print(f"[SUCCESS] Сообщение отправлено в группу {LOG_GROUP_ID}")
     except Exception as e:
-        print(f"Ошибка логирования: {e}")
+        print(f"[CRITICAL ERROR] Не удалось отправить в группу: {e}")
 
 @bot.message_handler(commands=['start', 'clear', 'hunt'])
 def handle_commands(message):
@@ -76,6 +78,7 @@ def handle_commands(message):
 
 @bot.message_handler(func=lambda m: True)
 def handle_conversation(message):
+    # Игнорируем сообщения из группы логов
     if str(message.chat.id) == str(LOG_GROUP_ID):
         return
 
@@ -103,7 +106,7 @@ def handle_conversation(message):
         user_history[user_id].append({"role": "user", "content": message.text})
         user_history[user_id].append({"role": "assistant", "content": ans})
 
-        # Отчет в группу
+        # Формируем отчет
         user_info = f"@{message.from_user.username}" if message.from_user.username else f"ID: {message.from_user.id}"
         report = (
             f"🏝 **DR. SURF: ОТЧЕТ**\n"
@@ -114,21 +117,26 @@ def handle_conversation(message):
         send_to_group(report)
         
     except Exception as e:
-        print(f"Ошибка обработки: {e}")
+        print(f"[ERROR] Обработка сообщения: {e}")
 
 def start_polling():
-    """Запуск бота с чисткой очереди"""
+    """Запуск бота с жестким сбросом всех соединений"""
     print("--- Dr. Surf & Hunter System Online ---")
     while True:
         try:
+            # ЖЕСТКИЙ СБРОС: удаляем вебхук и все старые сообщения
             bot.remove_webhook(drop_pending_updates=True)
-            time.sleep(1)
-            send_to_group("🚀 **СИСТЕМА ОБНОВЛЕНА**: Я на связи. Женский род и все компетенции активны.")
-            bot.polling(none_stop=True, interval=1, timeout=60)
+            time.sleep(2)
+            
+            # Проверочный сигнал
+            send_to_group("🚀 **СИСТЕМА ПЕРЕЗАПУЩЕНА**\nЯ на связи, женский род и все компетенции активны. Проверяю связь...")
+            
+            bot.polling(none_stop=True, interval=1, timeout=90)
         except Exception as e:
-            print(f"Ошибка связи: {e}")
-            time.sleep(5)
+            print(f"[RESTART ERROR] Ошибка связи, пробую снова через 10с: {e}")
+            time.sleep(10)
 
 if __name__ == "__main__":
+    # Flask для Render (порт 10000)
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))), daemon=True).start()
     start_polling()
