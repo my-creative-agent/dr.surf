@@ -20,9 +20,9 @@ GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 # Фиксированный ID твоей группы логов
 LOG_GROUP_ID = os.environ.get('LOG_GROUP_ID', "-5130568903") 
 
-# Максимальная стабильность для платного тарифа
-apihelper.CONNECT_TIMEOUT = 120
-apihelper.READ_TIMEOUT = 120
+# Настройки для быстрой работы
+apihelper.CONNECT_TIMEOUT = 30
+apihelper.READ_TIMEOUT = 30
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 client = Groq(api_key=GROQ_API_KEY)
@@ -58,25 +58,22 @@ SYSTEM_PROMPT = """
 def send_to_group(text):
     """Отправка отчета в группу логов"""
     try:
-        # Убеждаемся, что ID группы — целое число
         bot.send_message(int(LOG_GROUP_ID), text.strip(), parse_mode="Markdown", disable_web_page_preview=True)
-        print(f"[SUCCESS] Отчет отправлен в группу {LOG_GROUP_ID}")
+        print(f"[SUCCESS] Отчет отправлен")
     except Exception as e:
-        print(f"[ERROR] Группа логов недоступна: {e}")
+        print(f"[ERROR] Группа логов: {e}")
 
 @bot.message_handler(commands=['start', 'clear'])
 def handle_commands(message):
     user_id = message.from_user.id
     user_history[user_id] = deque(maxlen=10)
-    bot.reply_to(message, "Система Dr. Surf активирована. Я загрузила все знания: от анатомии до космологии. Чем могу помочь?")
+    bot.reply_to(message, "Система Dr. Surf активирована. Я на связи. Чем могу помочь?")
 
 @bot.message_handler(func=lambda m: True)
 def handle_conversation(message):
-    # Не отвечаем внутри группы логов
     if str(message.chat.id) == str(LOG_GROUP_ID):
         return
 
-    # В группах отвечаем только на команды или если бот упомянут (базовая логика)
     if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'):
         return
 
@@ -87,28 +84,22 @@ def handle_conversation(message):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         
-        # Сборка контекста для AI
         messages_for_ai = [{"role": "system", "content": SYSTEM_PROMPT}]
         for hist in user_history[user_id]:
             messages_for_ai.append(hist)
         messages_for_ai.append({"role": "user", "content": message.text})
 
-        # Запрос к Groq
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=messages_for_ai,
             temperature=0.4
         )
         ans = completion.choices[0].message.content
-        
-        # Ответ пользователю
         bot.reply_to(message, ans)
 
-        # Сохранение в память
         user_history[user_id].append({"role": "user", "content": message.text})
         user_history[user_id].append({"role": "assistant", "content": ans})
 
-        # Формирование и отправка отчета
         user_info = f"@{message.from_user.username}" if message.from_user.username else f"ID: {message.from_user.id}"
         report = (
             f"🏝 **DR. SURF: ОТЧЕТ**\n"
@@ -119,33 +110,20 @@ def handle_conversation(message):
         send_to_group(report)
         
     except Exception as e:
-        print(f"[ERROR] Критическая ошибка AI: {e}")
-
-def delayed_start_signal():
-    """Сигнал о запуске с задержкой для стабильности соединения"""
-    time.sleep(10)
-    send_to_group("🚀 **DR. SURF ONLINE**\nЯ на связи. Женский род, все компетенции (Art/Cosmo/Med) и секретность активны.")
+        print(f"[ERROR] AI Error: {e}")
 
 def start_polling():
     """Основной цикл работы бота"""
-    print("--- Dr. Surf Digital Twin System Online ---")
-    
-    # Запуск проверочного сообщения в отдельном потоке
-    threading.Thread(target=delayed_start_signal, daemon=True).start()
-    
+    print("--- Dr. Surf System Online ---")
     while True:
         try:
-            # Очистка старых обновлений при запуске
             bot.remove_webhook(drop_pending_updates=True)
-            bot.polling(none_stop=True, interval=1, timeout=90)
+            bot.polling(none_stop=True, interval=1, timeout=60)
         except Exception as e:
-            print(f"[RESTART ERROR] Переподключение через 10с: {e}")
-            time.sleep(10)
+            print(f"[RESTART] {e}")
+            time.sleep(5)
 
 if __name__ == "__main__":
-    # Запуск Flask сервера для Render
-    port = int(os.environ.get("PORT", 10000))
-    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port), daemon=True).start()
-    
-    # Запуск Telegram бота
+    # Запуск Flask сервера
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))), daemon=True).start()
     start_polling()
