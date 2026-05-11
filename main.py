@@ -17,20 +17,20 @@ def home():
 # Ключи из Environment Variables на Render
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
-# Фиксированный ID твоей группы логов
 LOG_GROUP_ID = os.environ.get('LOG_GROUP_ID', "-5130568903") 
 
 # Настройки для стабильности
-apihelper.CONNECT_TIMEOUT = 40
-apihelper.READ_TIMEOUT = 40
+apihelper.CONNECT_TIMEOUT = 60
+apihelper.READ_TIMEOUT = 60
 
-bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
+# Включаем потоковую обработку для скорости
+bot = telebot.TeleBot(BOT_TOKEN, threaded=True)
 client = Groq(api_key=GROQ_API_KEY)
 
 # Память контекста
 user_history = {}
 
-# --- ОБНОВЛЕННОЕ ДНК (ЦИФРОВОЙ ДВОЙНИК + ЖЕНСКИЙ ПОЛ) ---
+# --- ДНК (ЦИФРОВОЙ ДВОЙНИК + ЖЕНСКИЙ ПОЛ) ---
 SYSTEM_PROMPT = """
 Ты — Dr. Surf, цифровой двойник Виктории Акопян. 
 ВАЖНО: Говори СТРОГО от женского лица (я пришла, я увидела, я изучила). Ты — женщина-эксперт.
@@ -74,7 +74,7 @@ def handle_conversation(message):
     if str(message.chat.id) == str(LOG_GROUP_ID):
         return
 
-    # В группах отвечаем только на команды (когда бот вызван через /)
+    # В группах отвечаем только если есть обращение (в личке отвечаем на всё)
     if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'):
         return
 
@@ -97,11 +97,12 @@ def handle_conversation(message):
         )
         ans = completion.choices[0].message.content
         bot.reply_to(message, ans)
+        print(f"[SUCCESS] Ответила пользователю {user_id}")
 
         user_history[user_id].append({"role": "user", "content": message.text})
         user_history[user_id].append({"role": "assistant", "content": ans})
 
-        # Отчет в группу логов
+        # Отчет в группу
         user_info = f"@{message.from_user.username}" if message.from_user.username else f"ID: {message.from_user.id}"
         report = (
             f"🏝 **DR. SURF: ОТЧЕТ**\n"
@@ -115,21 +116,20 @@ def handle_conversation(message):
         print(f"[ERROR] AI Error: {e}")
 
 def start_polling():
-    """Основной цикл работы бота"""
-    print("--- Dr. Surf System Online ---")
+    """Бесконечный цикл с защитой от вылета"""
+    print("--- Dr. Surf System Online (Polling) ---")
     while True:
         try:
-            # Исправленный сброс вебхука без лишних аргументов
-            bot.remove_webhook()
-            time.sleep(1)
-            # Запуск с очисткой очереди
-            bot.polling(none_stop=True, interval=1, timeout=60, drop_pending_updates=True)
+            # Самый простой и надежный запуск
+            bot.polling(none_stop=True, interval=0, timeout=20)
         except Exception as e:
-            print(f"[RESTART] {e}")
-            time.sleep(10)
+            print(f"[POLLING ERROR] {e}")
+            time.sleep(5)
 
 if __name__ == "__main__":
-    # Flask для Render
+    # Запуск Flask
     port = int(os.environ.get("PORT", 10000))
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port), daemon=True).start()
+    
+    # Запуск Polling
     start_polling()
