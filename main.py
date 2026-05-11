@@ -20,9 +20,9 @@ GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 # Фиксированный ID твоей группы логов
 LOG_GROUP_ID = os.environ.get('LOG_GROUP_ID', "-5130568903") 
 
-# Настройки для быстрой работы
-apihelper.CONNECT_TIMEOUT = 30
-apihelper.READ_TIMEOUT = 30
+# Настройки для стабильности
+apihelper.CONNECT_TIMEOUT = 40
+apihelper.READ_TIMEOUT = 40
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 client = Groq(api_key=GROQ_API_KEY)
@@ -30,7 +30,7 @@ client = Groq(api_key=GROQ_API_KEY)
 # Память контекста
 user_history = {}
 
-# --- ОБНОВЛЕННОЕ ДНК (ТОЛЬКО ЦИФРОВОЙ ДВОЙНИК + ЖЕНСКИЙ ПОЛ) ---
+# --- ОБНОВЛЕННОЕ ДНК (ЦИФРОВОЙ ДВОЙНИК + ЖЕНСКИЙ ПОЛ) ---
 SYSTEM_PROMPT = """
 Ты — Dr. Surf, цифровой двойник Виктории Акопян. 
 ВАЖНО: Говори СТРОГО от женского лица (я пришла, я увидела, я изучила). Ты — женщина-эксперт.
@@ -59,7 +59,6 @@ def send_to_group(text):
     """Отправка отчета в группу логов"""
     try:
         bot.send_message(int(LOG_GROUP_ID), text.strip(), parse_mode="Markdown", disable_web_page_preview=True)
-        print(f"[SUCCESS] Отчет отправлен")
     except Exception as e:
         print(f"[ERROR] Группа логов: {e}")
 
@@ -71,9 +70,11 @@ def handle_commands(message):
 
 @bot.message_handler(func=lambda m: True)
 def handle_conversation(message):
+    # Не отвечаем в группе логов
     if str(message.chat.id) == str(LOG_GROUP_ID):
         return
 
+    # В группах отвечаем только на команды (когда бот вызван через /)
     if message.chat.type in ['group', 'supergroup'] and not message.text.startswith('/'):
         return
 
@@ -100,6 +101,7 @@ def handle_conversation(message):
         user_history[user_id].append({"role": "user", "content": message.text})
         user_history[user_id].append({"role": "assistant", "content": ans})
 
+        # Отчет в группу логов
         user_info = f"@{message.from_user.username}" if message.from_user.username else f"ID: {message.from_user.id}"
         report = (
             f"🏝 **DR. SURF: ОТЧЕТ**\n"
@@ -117,13 +119,17 @@ def start_polling():
     print("--- Dr. Surf System Online ---")
     while True:
         try:
-            bot.remove_webhook(drop_pending_updates=True)
-            bot.polling(none_stop=True, interval=1, timeout=60)
+            # Исправленный сброс вебхука без лишних аргументов
+            bot.remove_webhook()
+            time.sleep(1)
+            # Запуск с очисткой очереди
+            bot.polling(none_stop=True, interval=1, timeout=60, drop_pending_updates=True)
         except Exception as e:
             print(f"[RESTART] {e}")
-            time.sleep(5)
+            time.sleep(10)
 
 if __name__ == "__main__":
-    # Запуск Flask сервера
-    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))), daemon=True).start()
+    # Flask для Render
+    port = int(os.environ.get("PORT", 10000))
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port), daemon=True).start()
     start_polling()
