@@ -77,13 +77,23 @@ def agent_logic(message):
     if str(message.chat.id) == str(LOG_GROUP_ID):
         return
 
-    # 2. Проверка на упоминание в группах
-    if message.chat.type in ['group', 'supergroup']:
+    # 2. Проверка на необходимость ответа
+    should_respond = False
+    
+    # В личных сообщениях отвечаем всегда
+    if message.chat.type == 'private':
+        should_respond = True
+    
+    # В группах проверяем упоминание или ответ на бота
+    elif message.chat.type in ['group', 'supergroup']:
         bot_info = bot.get_me()
-        is_mentioned = f"@{bot_info.username}" in message.text if bot_info.username else False
+        is_mentioned = f"@{bot_info.username}" in message.text if (message.text and bot_info.username) else False
         is_reply = message.reply_to_message and message.reply_to_message.from_user.id == bot_info.id
-        if not (message.text.startswith('/') or is_mentioned or is_reply):
-            return
+        if is_mentioned or is_reply or message.text.startswith('/'):
+            should_respond = True
+
+    if not should_respond:
+        return
 
     user_id = message.from_user.id
     if user_id not in user_history: user_history[user_id] = deque(maxlen=10)
@@ -95,10 +105,10 @@ def agent_logic(message):
         for hist in user_history[user_id]: messages_for_ai.append(hist)
         
         bot_username = bot.get_me().username
-        clean_text = message.text.replace(f"@{bot_username}", "").strip() if bot_username else message.text
+        clean_text = message.text.replace(f"@{bot_username}", "").strip() if (message.text and bot_username) else message.text
         messages_for_ai.append({"role": "user", "content": clean_text})
 
-        print(f"[AI REQUEST] От пользователя {user_id}: {clean_text[:50]}")
+        print(f"[AI REQUEST] User {user_id}: {clean_text[:50]}")
 
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -131,11 +141,10 @@ def start_polling():
         time.sleep(2)
     except: pass
     
-    send_to_log_group("🚀 **Dr. Surf AI-Agent Online**\nВсе 'пироги' загружены. Режим женского лица: ВКЛ.")
+    send_to_log_group("🚀 **Dr. Surf AI-Agent Online**\nВсе системы проверены. Бот готов отвечать в ЛС и по упоминанию в группах.")
     
     while True:
         try:
-            # drop_pending_updates=True очищает очередь старых сообщений
             bot.polling(none_stop=True, interval=1, timeout=60, drop_pending_updates=True)
         except Exception as e:
             print(f"[POLLING ERROR] {e}")
@@ -146,7 +155,5 @@ def start_polling():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-    # Запуск веб-сервера для Render
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port), daemon=True).start()
-    # Запуск бота
     start_polling()
